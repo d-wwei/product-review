@@ -61,6 +61,12 @@ Step 6: 拟人用户体验模拟（NEW）
 
 Step 7: 报告生成
   7a 产品体验报告 / 7b 使用说明书 / 7c Persona 加权优化建议
+
+Step 7.5: 经验沉淀（Experience Bank）
+  提取可复用经验 → 写入 _experience_bank/ → 更新置信度
+
+Step 8: 经验注入（下次 review 生效）
+  检索同类产品历史经验 → 注入 persona 生成 context
 ```
 
 ## Persona 系统
@@ -105,6 +111,21 @@ Step 7: 报告生成
 | [AgentReviewHub](https://github.com/reynoldw/Agent-Lens) | 浏览器自动化 + 多 persona UX 评测 |
 | [A/B Agent](https://github.com/Applied-Machine-Learning-Lab/ABAgent) | 疲劳系统 + 记忆模块 |
 | [OASIS](https://github.com/camel-ai/oasis) | 百万级 Agent 社交模拟框架 |
+| [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) | 经验银行 + 置信度演化思想（轻量实现） |
+
+## Experience Bank（自进化经验系统）
+
+借鉴 [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) 的 Skill Bank + Experience Bank 双存储思想，但用纯 markdown 实现——零依赖、人工可审查、无回归风险。
+
+**工作原理**：每次 review 结束后自动提取 6 类经验（persona 有效性、品类专属、探索策略、报告质量、失败教训、通用洞察），写入 `reviews/_experience_bank/`。下次 review 同类产品时，自动检索相关经验注入 persona 生成 context。
+
+**经验条目**带结构化元数据：
+- **置信度**（0-1.0）：随验证次数提升，随时间和反例衰减
+- **来源追溯**：记录来自哪次 review 的哪个 persona
+- **适用条件**：明确什么情况下适用
+- **注入阈值**：仅置信度 >= 0.5 的经验被注入
+
+**效果**：review 做得越多，persona 生成越精准，探索策略越高效——skill 在使用中自然进化。
 
 ## 前置要求
 
@@ -132,19 +153,24 @@ git clone https://github.com/d-wwei/product-review.git ~/.claude/skills/product-
 
 ```
 reviews/
+  _experience_bank/                     # 经验银行（跨产品共享，自动积累）
+    _index.md                           #   经验索引
+    categories/                         #   按品类的经验
+    personas/                           #   Persona 经验（有效组合 + 反模式）
+    strategies/                         #   探索和报告策略经验
   xiaohongshu/
     20260328/
-      screenshots/                    # 全部截图
-        persona-1/                    # Persona 自主体验截图（模式 A/B）
+      screenshots/                      # 全部截图
+        persona-1/                      # Persona 自主体验截图（模式 A/B）
         persona-2/
-      exploration-log.md              # 探索日志
-      persona-profiles.md             # Persona 档案（完整属性 + 背景叙事）
-      persona-feedback-synthesis.md   # Persona 反馈综合分析
-      official-help-data.md           # 官方帮助中心数据
-      report.md                       # 产品体验报告
-      manual-core.md                  # 使用说明书 Core 版
-      manual-full.md                  # 使用说明书 MECE 版
-      optimization.md                 # Persona 加权优化建议
+      exploration-log.md                # 探索日志
+      persona-profiles.md               # Persona 档案（完整属性 + 背景叙事）
+      persona-feedback-synthesis.md     # Persona 反馈综合分析
+      official-help-data.md             # 官方帮助中心数据
+      report.md                         # 产品体验报告
+      manual-core.md                    # 使用说明书 Core 版
+      manual-full.md                    # 使用说明书 MECE 版
+      optimization.md                   # Persona 加权优化建议
 ```
 
 ## 报告模板说明
@@ -252,6 +278,12 @@ Step 6: Persona-Driven User Simulation (NEW)
 
 Step 7: Report Generation
   7a UX report / 7b User manual / 7c Persona-weighted optimization
+
+Step 7.5: Experience Capture (Experience Bank)
+  Extract reusable lessons → Write to _experience_bank/ → Update confidence scores
+
+Step 8: Experience Injection (takes effect on next review)
+  Retrieve relevant historical experiences → Inject into persona generation context
 ```
 
 ## Persona System
@@ -288,6 +320,21 @@ Each persona has structured attributes covering:
 | [AgentReviewHub](https://github.com/reynoldw/Agent-Lens) | Browser automation + multi-persona UX testing |
 | [A/B Agent](https://github.com/Applied-Machine-Learning-Lab/ABAgent) | Fatigue system + memory module |
 | [OASIS](https://github.com/camel-ai/oasis) | Million-scale agent social simulation framework |
+| [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) | Experience bank + confidence evolution (lightweight implementation) |
+
+## Experience Bank (Self-Evolution)
+
+Inspired by [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit)'s dual-store architecture, implemented in pure markdown -- zero dependencies, human-auditable, no regression risk.
+
+**How it works**: After each review, 6 types of lessons are extracted (persona effectiveness, category-specific, exploration strategy, report quality, anti-patterns, universal). Stored in `reviews/_experience_bank/`. On next review of a similar product, relevant experiences are retrieved and injected into persona generation context.
+
+**Experience entries** carry structured metadata:
+- **Confidence score** (0-1.0): rises with validation, decays with time and counter-evidence
+- **Provenance**: which review and which persona produced this insight
+- **Applicability conditions**: when this lesson applies
+- **Injection threshold**: only experiences with confidence >= 0.5 are injected
+
+**Effect**: More reviews = better personas, smarter exploration, higher quality reports. The skill naturally evolves through use.
 
 ## Prerequisites
 
@@ -314,19 +361,24 @@ Or manually copy `SKILL.md` to `~/.claude/skills/product-review/SKILL.md`.
 
 ```
 reviews/
+  _experience_bank/                     # Experience bank (shared across products)
+    _index.md                           #   Experience index
+    categories/                         #   Per-category experiences
+    personas/                           #   Persona experiences (effective combos + anti-patterns)
+    strategies/                         #   Exploration and report strategies
   xiaohongshu/
     20260328/
-      screenshots/                    # All screenshots
-        persona-1/                    # Persona autonomous screenshots (mode A/B)
+      screenshots/                      # All screenshots
+        persona-1/                      # Persona autonomous screenshots (mode A/B)
         persona-2/
-      exploration-log.md              # Exploration log
-      persona-profiles.md             # Persona profiles (full attributes + backstories)
-      persona-feedback-synthesis.md   # Persona feedback synthesis
-      official-help-data.md           # Official help center data
-      report.md                       # UX experience report
-      manual-core.md                  # User manual (core)
-      manual-full.md                  # User manual (MECE)
-      optimization.md                 # Persona-weighted optimization suggestions
+      exploration-log.md                # Exploration log
+      persona-profiles.md               # Persona profiles (full attributes + backstories)
+      persona-feedback-synthesis.md     # Persona feedback synthesis
+      official-help-data.md             # Official help center data
+      report.md                         # UX experience report
+      manual-core.md                    # User manual (core)
+      manual-full.md                    # User manual (MECE)
+      optimization.md                   # Persona-weighted optimization suggestions
 ```
 
 ## Technical Details

@@ -249,22 +249,35 @@ echo "工作目录: $BASE_DIR"
 
 ```
 reviews/
+  _experience_bank/                     # 经验银行（跨产品共享，自动积累）
+    _index.md                           #   经验索引
+    categories/                         #   按产品类别的经验
+      finance-investing.md
+      social-content.md
+      general.md
+      ...
+    personas/                           #   Persona 相关经验
+      effective-combinations.md         #     高效属性组合
+      anti-patterns.md                  #     无效模式
+    strategies/                         #   策略经验
+      exploration-patterns.md           #     探索策略
+      report-quality.md                 #     报告质量
   <app-name>/
     <YYYYMMDD>/
-      screenshots/                    # 所有截图
+      screenshots/                      # 所有截图
         01-launch.png
         02-home-tab1.png
-        persona-1/                    # Persona 自主体验截图（模式 A/B）
+        persona-1/                      # Persona 自主体验截图（模式 A/B）
         persona-2/
         ...
-      exploration-log.md              # 探索日志（主 agent 广度扫描汇总）
-      persona-profiles.md             # Persona 档案（Step 5.5 + 6.0 生成）
-      persona-feedback-synthesis.md   # Persona 反馈综合分析（Step 6.3）
-      report.md                       # 产品体验报告（如选择 ue-report）
-      manual-core.md                  # 使用说明书 Core 模式（如选择）
-      manual-full.md                  # 使用说明书 MECE 模式（如选择）
-      optimization.md                 # 优化建议（如选择 suggestion）
-      official-help-data.md           # 官方帮助数据（manual 模式生成）
+      exploration-log.md                # 探索日志（主 agent 广度扫描汇总）
+      persona-profiles.md               # Persona 档案（Step 5.5 + 6.0 生成）
+      persona-feedback-synthesis.md     # Persona 反馈综合分析（Step 6.3）
+      report.md                         # 产品体验报告（如选择 ue-report）
+      manual-core.md                    # 使用说明书 Core 模式（如选择）
+      manual-full.md                    # 使用说明书 MECE 模式（如选择）
+      optimization.md                   # 优化建议（如选择 suggestion）
+      official-help-data.md             # 官方帮助数据（manual 模式生成）
 ```
 
 ---
@@ -417,8 +430,30 @@ Agent(
 
 在 Step 5 探索完成后、Step 6 拟人模拟前执行。主 agent 基于探索数据分析产品的目标用户群体，为 persona 生成提供结构化输入。
 
-**输入**：Step 5 的 `exploration-log.md` + 截图 + 产品结构大纲
+**输入**：Step 5 的 `exploration-log.md` + 截图 + 产品结构大纲 + **Experience Bank 历史经验（如有）**
 **输出**：`{BASE_DIR}/persona-profiles.md`
+
+### 5.5.0 经验检索（Experience Retrieval）
+
+**首次 review 时跳过此步（experience bank 尚不存在）。**
+
+如果 `reviews/_experience_bank/` 已存在，执行 Step 8 的经验检索逻辑：
+
+```
+1. 检查 reviews/_experience_bank/_index.md 是否存在
+2. 如果存在：
+   a. 从 Step 5 探索结果推断产品类别
+   b. 加载 categories/{category}.md + categories/general.md
+   c. 加载 personas/effective-combinations.md + personas/anti-patterns.md
+   d. 过滤置信度 >= 0.5 的条目
+   e. 将经验注入后续 5.5.1 - 5.5.4 的分析 context 中
+3. 如果不存在：跳过，正常执行 5.5.1
+```
+
+注入后的效果示例：
+- 品类经验说"金融 App 必须有风控理解度维度" → 5.5.1 会将其加入关键维度
+- Persona 经验说"50+ 岁低技术用户 + 最低领域经验是高价值组合" → 5.5.3 采样时优先覆盖
+- Anti-pattern 说"同时设定高技术+低耐心的 persona 反馈价值低" → 5.5.3 采样时避免
 
 ### 5.5.1 产品类别与 Persona 维度识别
 
@@ -1561,6 +1596,294 @@ Agent(
 
 ## 附录：Persona 完整反馈
 （链接到各 persona 的完整反馈文件或内联展示摘要）
+```
+
+---
+
+## Step 7.5: 经验沉淀（Experience Bank）
+
+> **设计哲学**：借鉴 skill-se-kit 的 Skill Bank + Experience Bank 双存储模式，
+> 但用纯 markdown 实现，零依赖、人工可审查、无回归风险。
+> 经验只注入 context 辅助决策，不自动修改 SKILL.md 本身。
+
+每次 review 完成后（Step 7 报告生成之后），主 agent 执行经验提取和沉淀。
+
+### 7.5.1 Experience Bank 目录结构
+
+```
+reviews/
+  _experience_bank/                       # 经验银行根目录（跨产品共享）
+    _index.md                             # 经验索引（按类别+置信度排序）
+    categories/
+      finance-investing.md                # 金融/投资类 App 经验
+      social-content.md                   # 社交/内容类 App 经验
+      tools-productivity.md               # 工具/效率类 App 经验
+      ecommerce.md                        # 电商/消费类 App 经验
+      education.md                        # 教育/学习类 App 经验
+      health-fitness.md                   # 健康/运动类 App 经验
+      travel.md                           # 出行/旅行类 App 经验
+      general.md                          # 跨品类通用经验
+    personas/
+      effective-combinations.md           # 高效 persona 属性组合记录
+      anti-patterns.md                    # 无效/冗余的 persona 模式
+    strategies/
+      exploration-patterns.md             # 探索策略经验
+      report-quality.md                   # 报告质量经验
+```
+
+### 7.5.2 经验提取流程
+
+Step 7 报告生成完成后，主 agent 执行以下提取：
+
+```
+经验提取维度（6 类）：
+
+1. Persona 有效性经验
+   - 哪些 persona 产出了最有洞察力的反馈？（分析 persona-feedback-synthesis.md）
+   - 哪些 persona 的反馈高度重复/没有新增价值？
+   - 哪些属性组合对这个产品类别特别有效？
+   → 写入 personas/effective-combinations.md
+
+2. 产品类别专属经验
+   - 这类 App 哪些功能区域容易被忽略但很重要？
+   - 这类 App 的用户最关心什么维度？
+   - 哪些 persona 维度对这类 App 特别关键？
+   → 写入 categories/{category}.md
+
+3. 探索策略经验
+   - 哪些探索路径效率最高？
+   - 哪些页面/功能在第一屏以下藏着重要信息？
+   - 哪些交互模式需要特别测试（如长按、左滑、3D Touch）？
+   → 写入 strategies/exploration-patterns.md
+
+4. 报告质量经验
+   - 用户对报告哪些部分反馈最有价值？
+   - 哪些分析维度用户觉得多余或缺失？
+   - 优化建议的 P0/P1/P2 判断是否准确？
+   → 写入 strategies/report-quality.md
+
+5. 失败教训（anti-patterns）
+   - 哪些 persona 设定导致了不真实/低质量的反馈？
+   - 哪些探索策略浪费了时间但没有发现？
+   - 哪些报告模板的部分经常是空话？
+   → 写入 personas/anti-patterns.md
+
+6. 跨品类通用洞察
+   - 不论什么产品都适用的 persona/探索/报告经验
+   → 写入 categories/general.md
+```
+
+### 7.5.3 经验条目格式
+
+每条经验是一个结构化条目，带元数据用于后续检索和置信度衰减：
+
+```markdown
+### EXP-{category}-{seq}: {经验标题}
+
+- **置信度**: {0.0-1.0}（初始根据证据强度设定，随验证次数提升）
+- **来源**: {app_name} review ({date})
+- **验证次数**: {N}（后续 review 中被验证为有效的次数）
+- **最后验证**: {date}
+- **产品类别**: {category}
+- **适用条件**: {什么情况下这条经验适用}
+
+**经验内容**：
+{具体的可操作经验描述}
+
+**证据**：
+{来自哪个 persona 的什么反馈，或哪个探索发现支持这条经验}
+
+**反例**（如有）：
+{什么情况下这条经验不适用}
+```
+
+**示例**：
+
+```markdown
+### EXP-finance-001: 金融 App 必须包含"风控规则理解度"维度的 persona
+
+- **置信度**: 0.7
+- **来源**: moomoo review (2026-03-29)
+- **验证次数**: 1
+- **最后验证**: 2026-03-29
+- **产品类别**: finance-investing
+- **适用条件**: 涉及交易功能的金融 App
+
+**经验内容**：
+生成金融 App 的 persona 时，"风控规则理解度"是一个关键维度。
+不理解风控规则的用户（如不知道 T+2 结算、PDT 规则）会在关键交易
+环节遇到完全不同的困惑点，这类反馈对产品改进非常有价值。
+建议至少 1 个 persona 的风控理解度设为最低。
+
+**证据**：
+Persona #3（王大妈，55 岁退休教师）在尝试买入操作时，
+完全不理解"限价单"和"市价单"的区别，这暴露了产品在
+订单类型教育上的严重缺失——而其他 persona 都跳过了这个问题。
+```
+
+### 7.5.4 经验索引维护
+
+每次沉淀新经验后，更新 `_experience_bank/_index.md`：
+
+```markdown
+# Experience Bank Index
+
+> 上次更新: {date} | 总经验数: {N} | 覆盖品类: {N}
+
+## 按品类
+
+| 品类 | 经验数 | 最新来源 | 高置信度(>0.7) |
+|------|--------|---------|---------------|
+| finance-investing | {N} | {app} ({date}) | {N} |
+| social-content | {N} | {app} ({date}) | {N} |
+| ... | | | |
+
+## 按类型
+
+| 类型 | 数量 | 文件 |
+|------|------|------|
+| Persona 有效组合 | {N} | personas/effective-combinations.md |
+| Persona 反模式 | {N} | personas/anti-patterns.md |
+| 品类专属经验 | {N} | categories/*.md |
+| 探索策略 | {N} | strategies/exploration-patterns.md |
+| 报告质量 | {N} | strategies/report-quality.md |
+
+## 高置信度经验 Top 10
+1. [EXP-{id}] {title} — 置信度 {score}, 验证 {N} 次
+2. ...
+```
+
+### 7.5.5 置信度演化规则
+
+```
+经验条目的置信度不是静态的，会随时间和验证情况变化：
+
+初始置信度设定：
+- 基于单个 persona 的反馈 → 0.4
+- 基于多个 persona 的共识 → 0.6
+- 基于用户（Eli）直接反馈确认 → 0.8
+- 基于跨多次 review 验证 → 0.9
+
+置信度提升：
+- 后续 review 中被验证有效 → +0.1（上限 1.0）
+- 用户手动确认 → 直接设为 0.9
+
+置信度衰减：
+- 后续 review 中被发现不适用 → -0.15
+- 超过 90 天未被验证 → -0.05（最低不低于 0.2）
+- 置信度降到 0.2 以下 → 标记为 [待清理]，下次 review 时提示用户是否删除
+
+注入阈值：
+- 置信度 >= 0.5 的经验才会在 Step 5.5 中被注入到 persona 生成 context
+- 置信度 >= 0.7 的经验会被标记为 [高置信]，优先展示
+```
+
+### 7.5.6 主 agent 经验提取 prompt
+
+```
+Step 7 报告完成后，主 agent 执行以下操作：
+
+1. 读取本次 review 的所有产出文件：
+   - persona-profiles.md（persona 设定）
+   - persona-feedback-synthesis.md（反馈综合）
+   - report.md / optimization.md（报告产出）
+
+2. 分析并提取经验，按 7.5.2 的 6 个维度分别提取
+
+3. 检查 _experience_bank/ 是否已存在：
+   - 如果不存在 → 创建完整目录结构 + 写入首批经验
+   - 如果存在 → 读取已有经验，避免重复，合并或更新
+
+4. 对已有经验进行验证更新：
+   - 本次 review 与已有经验一致 → 验证次数 +1，置信度 +0.1
+   - 本次 review 与已有经验矛盾 → 置信度 -0.15，添加反例说明
+
+5. 更新 _index.md
+
+6. 向用户简要汇报：
+   "本次 review 沉淀了 {N} 条新经验，验证了 {M} 条已有经验，
+    {K} 条经验的置信度发生变化。详见 _experience_bank/_index.md。"
+```
+
+---
+
+## Step 8: 经验注入（Experience Retrieval）
+
+> 此步骤在 **下一次** review 时生效。首次 review 时 experience bank 为空，跳过此步。
+
+### 8.1 触发时机
+
+在 Step 5.5（产品用户画像分析）**之前**执行。即流程变为：
+
+```
+Step 5 自主探索 → Step 8 经验注入 → Step 5.5 用户画像分析 → Step 6 拟人模拟
+```
+
+### 8.2 经验检索逻辑
+
+```
+1. 确定本次 review 的产品类别（可从 Step 5 探索结果中推断）
+
+2. 检索相关经验：
+   a. categories/{category}.md — 品类专属经验（全部加载）
+   b. categories/general.md — 通用经验（全部加载）
+   c. personas/effective-combinations.md — 有效 persona 组合（全部加载）
+   d. personas/anti-patterns.md — 无效模式（全部加载）
+   e. strategies/exploration-patterns.md — 探索策略（选择性加载）
+
+3. 过滤：只保留置信度 >= 0.5 的经验条目
+
+4. 排序：按 置信度 × 相关度 降序（品类完全匹配的相关度=1.0，通用=0.7）
+
+5. 截断：最多注入 20 条经验（避免 context 过载）
+```
+
+### 8.3 注入方式
+
+检索到的经验以 context block 的形式注入到后续步骤：
+
+```markdown
+## 历史经验参考（来自 Experience Bank）
+
+> 以下经验来自之前的产品 review，按置信度排序。
+> 请在生成 persona 和制定探索策略时参考，但不要盲从——
+> 每个产品都有独特性，经验仅供参考。
+
+### 品类经验（{category}）
+- [高置信] EXP-{id}: {经验内容摘要}
+- [高置信] EXP-{id}: {经验内容摘要}
+- EXP-{id}: {经验内容摘要}
+...
+
+### Persona 经验
+- [高置信] 有效组合: {描述}
+- 反模式: {描述}（避免）
+...
+
+### 探索策略经验
+- {经验}
+...
+```
+
+**注入点**：
+
+1. **Step 5.5 的主 agent context**：品类经验 + persona 经验 → 影响 persona 维度选择和属性采样
+2. **Step 6.0 的 persona 生成 prompt**：有效组合经验 → 影响具体 persona 属性值
+3. **Step 5.2 的 subagent prompt**（可选）：探索策略经验 → 影响探索深度和重点
+
+### 8.4 经验使用记录
+
+注入经验后，记录哪些经验被实际使用：
+
+```
+在本次 review 的 exploration-log.md 末尾追加：
+
+## Experience Bank 使用记录
+| 经验 ID | 标题 | 置信度 | 是否采纳 | 备注 |
+|---------|------|--------|---------|------|
+| EXP-{id} | {title} | {score} | 是/否/部分 | {简要说明} |
+
+这份记录在 Step 7.5 经验沉淀时用于更新置信度。
 ```
 
 ---
