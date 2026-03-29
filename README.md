@@ -2,210 +2,122 @@
 
 # Product Review
 
-一个 AI agent skill，自动操控 iOS/Android 模拟器体验移动端 App，**生成 3-12 个拟人用户独立体验产品**，输出结构化产品报告。
+AI agent skill：操控模拟器体验 App，生成 3-12 个拟人用户独立测试，输出结构化报告。
 
-## 解决什么问题
+## 一个人的视角永远不够
 
-产品体验报告写起来慢、靠人肉点点点、每次换个人写结构都不一样。更关键的是——**一个人的视角永远是有限的**。
+你写过产品体验报告吗？一个人点遍所有功能，写下"界面清晰、操作流畅"——然后发给团队。
 
-这个 skill 让 AI agent 自己操作 App，逐页截图、记录路径，然后生成多个具有不同年龄/职业/认知水平/动机/行为习惯的"拟人用户"，让他们各自体验产品并给出主观反馈。最终汇总多视角洞察，输出标准化报告。
+问题是：一个 25 岁的产品经理和一个 55 岁的退休教师打开同一个 App，看到的是两个完全不同的产品。前者跳过引导直奔核心功能，后者卡在注册页面 3 分钟。你的报告里只有一个人的视角。
 
-## 四个子命令
+这个 skill 做的事：**让 AI agent 操控模拟器体验 App，然后生成多个背景完全不同的虚拟用户，让他们各自使用产品、各自吐槽、各自打分。** 一个 55 岁的王大妈会说"这个按钮啥意思"，一个 28 岁的量化交易员会说"下单路径比 IBKR 多了两步"。你拿到的不是一份报告，是一场迷你用户调研。
 
-```bash
-/product-review ue-report 小红书          # 产品体验报告（UX 五层模型）
-/product-review manual core WeChat        # 使用说明书（核心功能版）
-/product-review manual mece Notion        # 使用说明书（MECE 穷尽版）
-/product-review suggestion 抖音           # 功能/体验优化建议（含 persona 模拟）
-/product-review 小红书                     # 交互式选择报告类型
-```
-
-### Persona 模拟参数
+## 快速开始
 
 ```bash
-/product-review suggestion --mode=A 抖音             # 全自主：所有 persona 实际操控 App
-/product-review suggestion --mode=B 小红书           # 混合（默认）：核心 persona 操控 + 其余评审
-/product-review suggestion --mode=C WeChat           # 全评审：最快，基于探索数据
-/product-review suggestion --personas=8 抖音          # 指定 8 个 persona
-/product-review suggestion --mode=A --personas=5 抖音 # 组合参数
-```
-
-| 子命令 | 输出 | 适合场景 |
-|--------|------|----------|
-| `ue-report` | 基于用户体验要素五层模型的深度分析报告 | 竞品研究、产品评审 |
-| `manual core` | 只覆盖核心/独特功能的精简使用指南 | 快速了解产品、内部培训 |
-| `manual mece` | 遍历每一个功能和设置项，MECE 原则不遗漏 | 完整知识库、客服手册 |
-| `suggestion` | 拟人用户多视角反馈 + P0/P1/P2 优化建议（含 ROI） | 产品改进决策 |
-
-## 工作原理
-
-```
-Step 0-4: 环境检查 → 设备选择 → App 确认 → 模式选择 → 创建工作目录
-
-Step 5: 自主探索
-  主 agent ──→ 广度扫描（所有 Tab/入口）
-           ──→ subagent 集群（每个功能模块深入体验）
-           ──→ 特殊维度检查（首次体验、搜索、边界情况）
-
-Step 5.5: 产品用户画像分析（NEW）
-  产品类别识别 → 关键维度确定 → 用户分群矩阵 → 属性正交采样
-
-Step 6: 拟人用户体验模拟（NEW）
-  6.0 Persona 档案生成（20+ 属性 + 200 字背景叙事）
-  6.1 行为指令集（首次启动/导航/内容消费/交互/情绪触发器）
-  6.2 三模式体验执行
-      ├─ 模式 A: 每个 persona 独立操控 App（最真实）
-      ├─ 模式 B: 3 个核心 persona 操控 + 其余评审（默认）
-      └─ 模式 C: 所有 persona 基于探索数据评审（最快）
-  6.3 反馈聚合（共识/分群差异/情绪热力图/流失风险/付费分析）
-
-Step 7: 报告生成
-  7a 产品体验报告 / 7b 使用说明书 / 7c Persona 加权优化建议
-
-Step 7.5: 经验沉淀（Experience Bank）
-  提取可复用经验 → 写入 _experience_bank/ → 更新置信度
-
-Step 8: 经验注入（下次 review 生效）
-  检索同类产品历史经验 → 注入 persona 生成 context
-```
-
-## Persona 系统
-
-核心理念：**像真实用户一样多样化、行为、反馈**。
-
-### Persona 档案结构
-
-每个 persona 包含完整的结构化属性：
-
-| 维度 | 内容 |
-|------|------|
-| 基础属性 | 姓名、年龄、性别、职业（具体描述）、教育、所在地、收入、家庭 |
-| 技术认知 | 手机熟练度(1-5)、领域经验(1-5)、同类产品经历、新功能接受度 |
-| 动机目标 | 核心动机（具体场景）、期望解决的问题、学习成本预算、付费意愿 |
-| 行为模式 | 注意力模式、耐心程度、错误容忍度、探索风格、使用场景、单次时长 |
-| 性格特征 | 表达风格、关注重点、评价倾向、社交倾向 |
-| 背景叙事 | 200 字个人故事，包含生活状态和产品使用背景 |
-| 行为参数 | sentiment_bias, patience_score, tech_confidence 等 |
-
-### 行为指令集
-
-每个 persona 有独立的行为规则：
-- **首次启动**：看引导/跳过引导/直接操作
-- **导航行为**：逐个Tab探索/直奔目标/搜索优先
-- **内容消费**：只看标题/扫描关键词/完整阅读
-- **情绪触发器**：什么让 TA 开心/烦躁/惊喜/放弃
-
-### 多样性保障
-
-- 任意两个 persona 至少 3 个核心维度不同
-- 必须覆盖技术最低和领域最高的极端用户
-- 年龄至少覆盖 3 个区间
-- 评价倾向必须包含"严格"和"包容"
-
-### 设计参考
-
-| 项目 | 借鉴点 |
-|------|--------|
-| [MiroFish](https://github.com/666ghj/MiroFish) | 行为参数化 + 情绪触发器 + 闭环记忆 |
-| [DeepPersona](https://arxiv.org/abs/2511.07338) | 百级属性分层生成 + 正交采样 |
-| [AgentReviewHub](https://github.com/reynoldw/Agent-Lens) | 浏览器自动化 + 多 persona UX 评测 |
-| [A/B Agent](https://github.com/Applied-Machine-Learning-Lab/ABAgent) | 疲劳系统 + 记忆模块 |
-| [OASIS](https://github.com/camel-ai/oasis) | 百万级 Agent 社交模拟框架 |
-| [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) | 经验银行 + 置信度演化思想（轻量实现） |
-
-## Experience Bank（自进化经验系统）
-
-借鉴 [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) 的 Skill Bank + Experience Bank 双存储思想，但用纯 markdown 实现——零依赖、人工可审查、无回归风险。
-
-**工作原理**：每次 review 结束后自动提取 6 类经验（persona 有效性、品类专属、探索策略、报告质量、失败教训、通用洞察），写入 `reviews/_experience_bank/`。下次 review 同类产品时，自动检索相关经验注入 persona 生成 context。
-
-**经验条目**带结构化元数据：
-- **置信度**（0-1.0）：随验证次数提升，随时间和反例衰减
-- **来源追溯**：记录来自哪次 review 的哪个 persona
-- **适用条件**：明确什么情况下适用
-- **注入阈值**：仅置信度 >= 0.5 的经验被注入
-
-**效果**：review 做得越多，persona 生成越精准，探索策略越高效——skill 在使用中自然进化。
-
-## 前置要求
-
-1. **Claude Code**（CLI、桌面端或 IDE 插件均可）
-2. **mobile-mcp**：
-
-```bash
-claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
-```
-
-3. **模拟器环境**：
-   - iOS：Xcode + iOS Simulator（已启动）
-   - Android：Android Studio + Emulator（已启动）
-
-## 安装
-
-```bash
-# 克隆到 Claude Code skills 目录
+# 1. 安装
 git clone https://github.com/d-wwei/product-review.git ~/.claude/skills/product-review
+
+# 2. 添加 mobile-mcp（控制模拟器）
+claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
+
+# 3. 启动 iOS Simulator 或 Android Emulator，打开 Claude Code，运行：
+/product-review suggestion 小红书
 ```
 
-或手动复制 `SKILL.md` 到 `~/.claude/skills/product-review/SKILL.md`。
+前置条件：Claude Code + 模拟器环境（iOS 需要 Xcode，Android 需要 Android Studio）。
 
-## 输出目录结构
+## 四种报告
+
+```bash
+/product-review ue-report 小红书      # UX 五层模型深度分析
+/product-review manual core WeChat    # 核心功能使用指南
+/product-review manual mece Notion    # MECE 穷尽式完整手册
+/product-review suggestion 抖音       # 拟人用户反馈 + 优化建议
+```
+
+| 命令 | 你能拿到什么 | 适合谁 |
+|------|------------|--------|
+| `ue-report` | 战略-范围-结构-框架-表现五层分析，附用户旅程情绪曲线 | 做竞品研究的产品经理 |
+| `manual core` | 3-5 个核心功能的操作指南 + Top 10 FAQ | 需要快速了解产品的团队 |
+| `manual mece` | 功能树 + 每个按钮/设置项的穷尽文档 + 覆盖率报告 | 客服知识库、合规文档 |
+| `suggestion` | 多 persona 反馈聚合 + P0/P1/P2 优化建议 + ROI 评估 | 做产品决策的人 |
+
+## Persona 模拟：三种模式
+
+```bash
+/product-review suggestion --mode=A 抖音             # 全自主：每个 persona 独立操控 App
+/product-review suggestion --mode=B 小红书           # 混合（默认）：3 个核心 persona 操控 + 其余评审
+/product-review suggestion --mode=C WeChat           # 全评审：最快，基于已有探索数据
+/product-review suggestion --personas=8 抖音          # 指定 persona 数量（默认按产品复杂度 3-12 个）
+```
+
+| 模式 | 做了什么 | 花多久 |
+|------|---------|--------|
+| A 全自主 | 每个 persona 在模拟器上实际操作 App，按自己的性格和动机走不同路径 | 最长 |
+| B 混合 | 3 个最关键的 persona 实操（新手/目标用户/挑剔用户），其余基于截图评审 | 中等 |
+| C 全评审 | 所有 persona 看 Step 5 的探索截图和操作记录，给出评价 | 最快 |
+
+## 每个 Persona 长什么样
+
+不是"新手用户"三个字。是一个有名有姓、有故事的人：
+
+> **Persona #3: 王淑芬**，55 岁，退休小学教师，住在成都。女儿在加拿大工作，推荐她用这个 App 买点美股 ETF 养老。她只会用微信和支付宝，App Store 都要女儿远程帮她搜。对"限价单"和"市价单"完全没概念。每次打开 App 不超过 5 分钟，加载超过 3 秒就退出。
+
+每个 persona 有 20+ 结构化属性（年龄、职业、技术水平、领域经验、动机、耐心程度、情绪触发器...）、一份行为指令集（遇到弹窗怎么反应、看到长列表翻几屏）、和一段 200 字背景叙事。
+
+多样性靠属性正交采样保证——任意两个 persona 至少 3 个核心维度不同，极端用户（最低技术、最高领域专家）强制覆盖。
+
+## Experience Bank：用得越多越准
+
+第一次 review 和第十次 review 的质量不应该一样。
+
+每次 review 结束后，系统自动提取 6 类可复用经验：哪些 persona 属性组合产出了最好的洞察、这类 App 哪些功能区域容易被忽略、哪些探索策略浪费了时间。写入 `reviews/_experience_bank/`，带置信度评分。
+
+下次 review 同类产品时，系统检索相关经验注入 persona 生成环节。置信度 >= 0.5 才注入，随验证次数提升，随时间和反例衰减。
+
+效果：金融 App review 了 3 次之后，系统知道"风控规则理解度"是必须覆盖的 persona 维度；社交 App review 了 2 次之后，系统知道"设置页面的隐私选项经常藏在第三层"。Skill 在使用中自然进化。
+
+## 流程全景
+
+```
+探索 ──→ 画像 ──→ 模拟 ──→ 报告 ──→ 沉淀
+  |         |        |        |        |
+  |         |        |        |        └─ 提取经验写入 experience bank
+  |         |        |        └─ 生成报告（UX/手册/优化建议）
+  |         |        └─ 3-12 个 persona 独立体验/评审，反馈聚合
+  |         └─ 识别产品类别，检索历史经验，生成 persona 档案
+  └─ 主 agent 广度扫描 + subagent 集群深入每个功能模块
+```
+
+## 输出结构
 
 ```
 reviews/
-  _experience_bank/                     # 经验银行（跨产品共享，自动积累）
-    _index.md                           #   经验索引
-    categories/                         #   按品类的经验
-    personas/                           #   Persona 经验（有效组合 + 反模式）
-    strategies/                         #   探索和报告策略经验
+  _experience_bank/                   # 经验银行（跨产品共享）
+    _index.md
+    categories/                       #   按品类积累
+    personas/                         #   有效组合 + 反模式
+    strategies/                       #   探索和报告策略
   xiaohongshu/
-    20260328/
-      screenshots/                      # 全部截图
-        persona-1/                      # Persona 自主体验截图（模式 A/B）
-        persona-2/
-      exploration-log.md                # 探索日志
-      persona-profiles.md               # Persona 档案（完整属性 + 背景叙事）
-      persona-feedback-synthesis.md     # Persona 反馈综合分析
-      official-help-data.md             # 官方帮助中心数据
-      report.md                         # 产品体验报告
-      manual-core.md                    # 使用说明书 Core 版
-      manual-full.md                    # 使用说明书 MECE 版
-      optimization.md                   # Persona 加权优化建议
+    20260329/
+      screenshots/                    # 截图（含 persona 专属子目录）
+      exploration-log.md              # 探索日志
+      persona-profiles.md             # Persona 完整档案
+      persona-feedback-synthesis.md   # 反馈综合分析
+      report.md                       # 产品体验报告
+      optimization.md                 # 优化建议
 ```
 
-## 报告模板说明
+## 设计参考
 
-### 产品体验报告 (`ue-report`)
-
-基于 Jesse James Garrett 的用户体验要素五层模型：
-
-| 层级 | 分析维度 |
-|------|----------|
-| 战略层 | 产品目标、用户需求、商业模式推断 |
-| 范围层 | 功能清单、内容分析、功能聚焦度 |
-| 结构层 | 信息架构图、交互流程、用户流程分析 |
-| 框架层 | 界面布局、信息设计、导航设计 |
-| 表现层 | 视觉风格、色彩、排版、动效、平台规范 |
-
-### 使用说明书 (`manual`)
-
-- **Core**：3-5 个核心功能 + 独特亮点 + Top 10 FAQ
-- **MECE**：功能全景树 + 每个功能穷尽所有操作项/设置项 + 覆盖率报告
-
-### 优化建议 (`suggestion`)
-
-多个拟人用户独立体验/评审产品后：
-- 反馈聚合：共识发现、分群差异、情绪热力图、流失风险、付费意愿
-- P0/P1/P2 优先级排序，每条建议附带 persona 原声引用和影响面分析
-- 按用户群分层的专属建议（新手/核心/专家各自 Top 3）
-
-## 技术细节
-
-- 通过 mobile-mcp 的 24 个工具控制模拟器
-- 每次操作前用 `mobile_list_elements_on_screen` 获取坐标
-- 每个关键步骤操作前截图保存
-- Persona patience_score 控制探索深度（0.0-0.3: 2-5min, 0.8-1.0: 30+min）
-- 支持同一产品多次体验的版本对比
+| 项目 | 借鉴了什么 |
+|------|-----------|
+| [MiroFish](https://github.com/666ghj/MiroFish) | 行为参数化 + 情绪触发器 + 闭环记忆演化 |
+| [DeepPersona](https://arxiv.org/abs/2511.07338) | 百级属性分层采样，44% 更高独特性 |
+| [AgentReviewHub](https://github.com/reynoldw/Agent-Lens) | 多 persona 浏览器自动化 UX 评测 |
+| [A/B Agent](https://github.com/Applied-Machine-Learning-Lab/ABAgent) | 疲劳系统控制探索深度 |
+| [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) | 经验银行 + 置信度演化（轻量实现） |
 
 ## License
 
@@ -219,175 +131,122 @@ MIT
 
 # Product Review
 
-An AI agent skill that autonomously operates iOS/Android simulators to experience mobile apps, **generates 3-12 synthetic user personas who independently test the product**, and outputs structured reports.
+AI agent skill: operates simulators to test apps, generates 3-12 synthetic users who experience the product independently, outputs structured reports.
 
-## The Problem
+## One Perspective Is Never Enough
 
-Writing product experience reports is slow, manual, and inconsistent. More importantly, **one person's perspective is always limited**.
+You've written product experience reports before. One person clicks through every feature, writes "clean UI, smooth interactions," and sends it to the team.
 
-This skill lets AI agents operate apps themselves, screenshot every page, record paths, then generate multiple "synthetic users" with different ages, professions, expertise levels, motivations, and behavior patterns. Each persona experiences the product independently and provides subjective feedback. Multi-perspective insights are aggregated into standardized reports.
+The problem: a 25-year-old PM and a 55-year-old retiree open the same app and see two different products. The PM skips onboarding and goes straight to the core feature. The retiree gets stuck on the registration page for 3 minutes. Your report only captures one of those stories.
 
-## Four Subcommands
+This skill does something different. **It operates the app on a simulator, then generates multiple virtual users with distinct backgrounds who each use the product on their own terms.** A 55-year-old retired teacher says "what does this button do?" A 28-year-old quant trader says "the order flow takes two more taps than IBKR." What you get isn't one report. It's a mini user study.
 
-```bash
-/product-review ue-report Xiaohongshu       # UX report (5-layer model)
-/product-review manual core WeChat           # User manual (core features)
-/product-review manual mece Notion           # User manual (exhaustive MECE)
-/product-review suggestion TikTok            # Optimization suggestions (with persona sim)
-/product-review Xiaohongshu                  # Interactive mode selection
-```
-
-### Persona Simulation Parameters
+## Quick Start
 
 ```bash
-/product-review suggestion --mode=A TikTok            # Full autonomous: all personas operate app
-/product-review suggestion --mode=B Xiaohongshu       # Hybrid (default): core personas operate + rest review
-/product-review suggestion --mode=C WeChat            # Review-only: fastest, based on exploration data
-/product-review suggestion --personas=8 TikTok         # Specify 8 personas
-/product-review suggestion --mode=A --personas=5 TikTok # Combined params
-```
-
-| Subcommand | Output | Best For |
-|------------|--------|----------|
-| `ue-report` | Deep analysis based on UX 5-layer model | Competitive research, product reviews |
-| `manual core` | Concise guide covering core/unique features | Quick onboarding, training |
-| `manual mece` | Exhaustive docs, every feature and setting, MECE | Knowledge base, support handbook |
-| `suggestion` | Multi-persona feedback + P0/P1/P2 recommendations with ROI | Product improvement decisions |
-
-## How It Works
-
-```
-Steps 0-4: Environment check → Device → App → Mode → Work directory
-
-Step 5: Autonomous Exploration
-  Main agent ──→ Breadth scan (all tabs/entries)
-             ──→ Subagent cluster (deep dive per module)
-             ──→ Special checks (first launch, search, edge cases)
-
-Step 5.5: Product User Profiling (NEW)
-  Category detection → Key dimensions → User segmentation → Orthogonal sampling
-
-Step 6: Persona-Driven User Simulation (NEW)
-  6.0 Persona profile generation (20+ attributes + 200-word backstory)
-  6.1 Behavior instruction sets (triggers, reactions, attention patterns)
-  6.2 Three execution modes
-      ├── Mode A: Every persona operates the app independently (most authentic)
-      ├── Mode B: 3 core personas operate + rest review (default)
-      └── Mode C: All personas review exploration data (fastest)
-  6.3 Feedback aggregation (consensus, segments, emotion heatmap, churn risk, willingness to pay)
-
-Step 7: Report Generation
-  7a UX report / 7b User manual / 7c Persona-weighted optimization
-
-Step 7.5: Experience Capture (Experience Bank)
-  Extract reusable lessons → Write to _experience_bank/ → Update confidence scores
-
-Step 8: Experience Injection (takes effect on next review)
-  Retrieve relevant historical experiences → Inject into persona generation context
-```
-
-## Persona System
-
-Core principle: **Diverse like real users. Behave like real users. React like real users.**
-
-### Persona Profile Structure
-
-Each persona has structured attributes covering:
-
-| Dimension | Content |
-|-----------|---------|
-| Demographics | Name, age, gender, profession (specific), education, location, income, family |
-| Tech & Domain | Phone proficiency (1-5), domain expertise (1-5), competing apps used, openness to new features |
-| Motivation | Core motivation (specific scenario), problems to solve, learning budget, willingness to pay |
-| Behavior | Attention pattern, patience level, error tolerance, exploration style, usage context, session length |
-| Personality | Expression style, focus area, rating tendency, social tendency |
-| Backstory | 200-word narrative with life context and product relationship |
-| Parameters | sentiment_bias, patience_score, tech_confidence, etc. |
-
-### Diversity Guarantees
-
-- Any two personas differ in at least 3 core dimensions
-- Covers extreme low-tech and domain-expert users
-- At least 3 age brackets represented
-- Includes both strict and lenient evaluators
-
-### Design References
-
-| Project | What We Borrowed |
-|---------|-----------------|
-| [MiroFish](https://github.com/666ghj/MiroFish) | Behavior parameterization + emotion triggers + memory loop |
-| [DeepPersona](https://arxiv.org/abs/2511.07338) | 100+ attribute taxonomy + orthogonal sampling |
-| [AgentReviewHub](https://github.com/reynoldw/Agent-Lens) | Browser automation + multi-persona UX testing |
-| [A/B Agent](https://github.com/Applied-Machine-Learning-Lab/ABAgent) | Fatigue system + memory module |
-| [OASIS](https://github.com/camel-ai/oasis) | Million-scale agent social simulation framework |
-| [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) | Experience bank + confidence evolution (lightweight implementation) |
-
-## Experience Bank (Self-Evolution)
-
-Inspired by [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit)'s dual-store architecture, implemented in pure markdown -- zero dependencies, human-auditable, no regression risk.
-
-**How it works**: After each review, 6 types of lessons are extracted (persona effectiveness, category-specific, exploration strategy, report quality, anti-patterns, universal). Stored in `reviews/_experience_bank/`. On next review of a similar product, relevant experiences are retrieved and injected into persona generation context.
-
-**Experience entries** carry structured metadata:
-- **Confidence score** (0-1.0): rises with validation, decays with time and counter-evidence
-- **Provenance**: which review and which persona produced this insight
-- **Applicability conditions**: when this lesson applies
-- **Injection threshold**: only experiences with confidence >= 0.5 are injected
-
-**Effect**: More reviews = better personas, smarter exploration, higher quality reports. The skill naturally evolves through use.
-
-## Prerequisites
-
-1. **Claude Code** (CLI, desktop app, or IDE extension)
-2. **mobile-mcp**:
-
-```bash
-claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
-```
-
-3. **Simulator**:
-   - iOS: Xcode + iOS Simulator (booted)
-   - Android: Android Studio + Emulator (running)
-
-## Installation
-
-```bash
+# 1. Install
 git clone https://github.com/d-wwei/product-review.git ~/.claude/skills/product-review
+
+# 2. Add mobile-mcp (simulator control)
+claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
+
+# 3. Boot iOS Simulator or Android Emulator, open Claude Code, run:
+/product-review suggestion TikTok
 ```
 
-Or manually copy `SKILL.md` to `~/.claude/skills/product-review/SKILL.md`.
+Prerequisites: Claude Code + simulator (iOS needs Xcode, Android needs Android Studio).
+
+## Four Report Types
+
+```bash
+/product-review ue-report Xiaohongshu     # UX 5-layer deep analysis
+/product-review manual core WeChat        # Core feature user guide
+/product-review manual mece Notion        # Exhaustive MECE documentation
+/product-review suggestion TikTok         # Persona feedback + optimization
+```
+
+| Command | What You Get | Who It's For |
+|---------|-------------|-------------|
+| `ue-report` | Strategy-Scope-Structure-Skeleton-Surface analysis with user journey emotion curves | PMs doing competitive research |
+| `manual core` | 3-5 core feature walkthroughs + Top 10 FAQ | Teams that need quick product knowledge |
+| `manual mece` | Complete feature tree, every button and setting documented, coverage report | Support knowledge bases, compliance docs |
+| `suggestion` | Multi-persona feedback aggregation + P0/P1/P2 recommendations with ROI | People making product decisions |
+
+## Persona Simulation: Three Modes
+
+```bash
+/product-review suggestion --mode=A TikTok          # Full autonomous: every persona operates the app
+/product-review suggestion --mode=B Xiaohongshu      # Hybrid (default): 3 core personas operate + rest review
+/product-review suggestion --mode=C WeChat           # Review-only: fastest, uses existing exploration data
+/product-review suggestion --personas=8 TikTok       # Set persona count (default: 3-12 based on complexity)
+```
+
+| Mode | What Happens | Speed |
+|------|-------------|-------|
+| A | Every persona operates the app on the simulator, following their own motivation and behavior patterns | Slowest |
+| B | 3 critical personas operate (newbie + target user + picky expert), rest review screenshots | Medium |
+| C | All personas evaluate the Step 5 exploration data and screenshots | Fastest |
+
+## What a Persona Looks Like
+
+Not "new user" in three words. A person with a name and a story:
+
+> **Persona #3: Wang Shufen**, 55, retired elementary school teacher in Chengdu. Her daughter works in Canada and recommended this app for buying US ETFs as retirement savings. She only knows how to use WeChat and Alipay -- can't even search the App Store without her daughter's help over video call. No concept of "limit orders" vs "market orders." Never spends more than 5 minutes per session. Leaves if anything takes longer than 3 seconds to load.
+
+Each persona carries 20+ structured attributes (age, profession, tech proficiency, domain expertise, motivation, patience level, emotion triggers...), a behavior instruction set (how they react to popups, how far they scroll through lists), and a 200-word backstory.
+
+Diversity is enforced through orthogonal attribute sampling. Any two personas differ on at least 3 core dimensions. Extreme users (lowest tech skill, highest domain expertise) are always represented.
+
+## Experience Bank: Gets Better With Use
+
+The first review and the tenth review shouldn't be the same quality.
+
+After each review, the system extracts 6 types of reusable lessons: which persona attribute combinations produced the best insights, which feature areas are easy to miss for this app category, which exploration strategies wasted time. Stored in `reviews/_experience_bank/` with confidence scores.
+
+Next time you review a similar product, the system retrieves relevant experiences and injects them into persona generation. Confidence must be >= 0.5 to qualify. Scores rise with validation, decay with time and counter-evidence.
+
+The result: after 3 finance app reviews, the system knows "regulatory rule comprehension" must be a persona dimension. After 2 social app reviews, it knows "privacy settings are usually buried three levels deep." The skill evolves through use.
+
+## Pipeline Overview
+
+```
+Explore ──→ Profile ──→ Simulate ──→ Report ──→ Learn
+   |           |           |           |          |
+   |           |           |           |          └─ Extract lessons into experience bank
+   |           |           |           └─ Generate reports (UX / manual / optimization)
+   |           |           └─ 3-12 personas test independently, feedback aggregated
+   |           └─ Detect category, retrieve past experiences, generate persona profiles
+   └─ Main agent breadth scan + subagent cluster deep dives per module
+```
 
 ## Output Structure
 
 ```
 reviews/
-  _experience_bank/                     # Experience bank (shared across products)
-    _index.md                           #   Experience index
-    categories/                         #   Per-category experiences
-    personas/                           #   Persona experiences (effective combos + anti-patterns)
-    strategies/                         #   Exploration and report strategies
+  _experience_bank/                   # Experience bank (shared across products)
+    _index.md
+    categories/                       #   Per-category lessons
+    personas/                         #   Effective combos + anti-patterns
+    strategies/                       #   Exploration and report strategies
   xiaohongshu/
-    20260328/
-      screenshots/                      # All screenshots
-        persona-1/                      # Persona autonomous screenshots (mode A/B)
-        persona-2/
-      exploration-log.md                # Exploration log
-      persona-profiles.md               # Persona profiles (full attributes + backstories)
-      persona-feedback-synthesis.md     # Persona feedback synthesis
-      official-help-data.md             # Official help center data
-      report.md                         # UX experience report
-      manual-core.md                    # User manual (core)
-      manual-full.md                    # User manual (MECE)
-      optimization.md                   # Persona-weighted optimization suggestions
+    20260329/
+      screenshots/                    # Screenshots (with per-persona subdirs)
+      exploration-log.md              # Exploration log
+      persona-profiles.md             # Full persona profiles
+      persona-feedback-synthesis.md   # Feedback synthesis
+      report.md                       # UX experience report
+      optimization.md                 # Optimization suggestions
 ```
 
-## Technical Details
+## Design References
 
-- Controls simulators via mobile-mcp's 24 tools
-- Uses `mobile_list_elements_on_screen` for coordinates before every tap
-- Screenshots before each key operation
-- Persona patience_score controls exploration depth (0.0-0.3: 2-5min, 0.8-1.0: 30+min)
-- Supports version comparison across multiple reviews
+| Project | What We Took |
+|---------|-------------|
+| [MiroFish](https://github.com/666ghj/MiroFish) | Behavior parameterization + emotion triggers + memory loop |
+| [DeepPersona](https://arxiv.org/abs/2511.07338) | 100+ attribute taxonomy, 44% higher uniqueness |
+| [AgentReviewHub](https://github.com/reynoldw/Agent-Lens) | Multi-persona browser-automated UX testing |
+| [A/B Agent](https://github.com/Applied-Machine-Learning-Lab/ABAgent) | Fatigue system for exploration depth control |
+| [skill-se-kit](https://github.com/skill-se-kit/skill-se-kit) | Experience bank + confidence evolution (lightweight impl) |
 
 ## License
 
