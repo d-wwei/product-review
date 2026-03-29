@@ -6,30 +6,32 @@ description: |
   "测评 [App]", "product review", "review this app".
   Subcommands: ue-report, manual core, manual mece, suggestion.
   Requires mobile-mcp (@mobilenext/mobile-mcp) for iOS/Android simulator control.
+  Works with any AI agent that supports MCP (Claude Code, Cursor, Windsurf, Codex, etc.).
 type: interactive
 argument-hint: "[ue-report | manual core | manual mece | suggestion] [App名称]"
-allowed-tools:
-  - Bash
-  - Read
-  - Write
-  - Edit
-  - Glob
-  - Grep
-  - Agent
-  - AskUserQuestion
-  - WebSearch
-  - WebFetch
-  - TaskCreate
-  - TaskUpdate
-  - TaskList
 ---
 
 # Product Review
 
-AI agent 自主体验移动端产品，撰写结构化产品体验报告。
+通用 AI agent skill，自主体验移动端产品，撰写结构化产品体验报告。
 
 通过 mobile-mcp 控制 iOS/Android 模拟器，系统性浏览 App 的每个功能，
 截图记录，最终输出专业的产品体验报告、使用说明书或优化建议。
+
+适用于任何支持 MCP 的 AI agent 平台（Claude Code, Cursor, Windsurf, Codex, Cline 等）。
+
+### agent 能力要求
+
+本 skill 需要 agent 具备以下能力（大多数主流 agent 平台均支持）：
+
+| 能力 | 用途 | 必需 |
+|------|------|------|
+| MCP 工具调用 | 调用 mobile-mcp 控制模拟器 | 是 |
+| 文件读写 | 保存截图、生成报告 | 是 |
+| Shell 命令执行 | 创建目录、检查环境 | 是 |
+| 子 agent 派发 | 并行探索功能模块、模拟用户角色 | 推荐（无则主 agent 串行执行） |
+| Web 搜索 / 网页抓取 | 检索官方帮助中心补充 FAQ | 推荐（无则跳过） |
+| 用户交互询问 | 选择模式、确认目标 App | 推荐（无则使用子命令参数） |
 
 ## 子命令
 
@@ -83,34 +85,41 @@ AI agent 自主体验移动端产品，撰写结构化产品体验报告。
 
 ## Step 0: 环境检查
 
-运行以下检查，确认 mobile-mcp 可用：
+确认 mobile-mcp 可用。尝试调用 `mobile_list_available_devices`：
+- 如果调用成功（返回设备列表）→ mobile-mcp 已配置，继续。
+- 如果调用失败或工具不存在 → mobile-mcp 未配置。
 
-```bash
-# 检查 mobile-mcp 是否已配置
-if grep -q "mobile" ~/.claude/settings.json 2>/dev/null || \
-   grep -q "mobile" ~/.claude/settings.local.json 2>/dev/null; then
-  echo "MOBILE_MCP=configured"
-else
-  echo "MOBILE_MCP=not_found"
-fi
-```
-
-**如果 `MOBILE_MCP=not_found`：**
+**如果 mobile-mcp 未检测到：**
 
 告诉用户：
 
-> mobile-mcp 未检测到。请先安装：
+> mobile-mcp 未检测到。请根据你使用的 agent 平台安装：
 >
+> **Claude Code：**
 > ```bash
 > claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
 > ```
 >
-> 前置要求：Node.js v22+，iOS 需要 Xcode CLI tools，Android 需要 Platform Tools。
-> 安装后重启 Claude Code 再试。
+> **Cursor / Windsurf / 其他支持 MCP 的 IDE：**
+> 在 MCP 配置文件中添加：
+> ```json
+> {
+>   "mcpServers": {
+>     "mobile-mcp": {
+>       "command": "npx",
+>       "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+>     }
+>   }
+> }
+> ```
+>
+> **Codex / 其他 CLI agent：**
+> 参考对应平台的 MCP server 配置文档，添加 `@mobilenext/mobile-mcp`。
+>
+> **前置要求**：Node.js v22+，iOS 需要 Xcode CLI tools，Android 需要 Platform Tools。
+> 安装后重启 agent 再试。
 
 **停止执行，等用户完成安装。**
-
-如果已配置，继续。
 
 ---
 

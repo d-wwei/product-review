@@ -2,7 +2,7 @@
 
 # Product Review
 
-一个 AI agent skill，自动操控 iOS/Android 模拟器体验移动端 App，生成结构化产品报告。
+通用 AI agent skill，自动操控 iOS/Android 模拟器体验移动端 App，生成结构化产品报告。适用于任何支持 MCP 的 agent 平台。
 
 ## 解决什么问题
 
@@ -41,13 +41,40 @@
 
 **探索策略**：先广度（遍历所有主入口），再深度（逐个功能模块深入）。主 agent 只负责协调和汇总，保持上下文干净。
 
+## 支持的 Agent 平台
+
+任何支持 MCP (Model Context Protocol) 的 AI agent 平台均可使用：
+
+| 平台 | 状态 |
+|------|------|
+| Claude Code (CLI / Desktop / IDE) | 已验证 |
+| Cursor | 支持 |
+| Windsurf | 支持 |
+| Cline | 支持 |
+| OpenAI Codex CLI | 支持（需 MCP 配置） |
+| 其他支持 MCP 的 agent | 支持 |
+
 ## 前置要求
 
-1. **Claude Code**（CLI、桌面端或 IDE 插件均可）
-2. **mobile-mcp**：
+1. **任意支持 MCP 的 AI agent 平台**
+2. **mobile-mcp**（按你的平台选择安装方式）：
 
+**Claude Code：**
 ```bash
 claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
+```
+
+**Cursor / Windsurf / Cline / 其他 IDE：**
+在 MCP 配置文件中添加：
+```json
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+    }
+  }
+}
 ```
 
 3. **模拟器环境**：
@@ -56,14 +83,19 @@ claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
 
 ## 安装
 
-把 skill 目录放到 Claude Code 的 skills 路径下：
+将 `SKILL.md` 放到你的 agent 平台的 skill 目录下：
 
 ```bash
-# 克隆到 Claude Code skills 目录
+# Claude Code
 git clone https://github.com/d-wwei/product-review.git ~/.claude/skills/product-review
+
+# Codex
+git clone https://github.com/d-wwei/product-review.git .agents/skills/product-review
+
+# 其他平台：将 SKILL.md 复制到对应的 skill/prompt 目录
 ```
 
-或手动复制 `SKILL.md` 到 `~/.claude/skills/product-review/SKILL.md`。
+或直接将 `SKILL.md` 内容作为系统提示词注入你的 agent。
 
 ## 输出目录结构
 
@@ -130,7 +162,7 @@ MIT
 
 # Product Review
 
-An AI agent skill that autonomously operates iOS/Android simulators to experience mobile apps and generate structured product reports.
+A universal AI agent skill that autonomously operates iOS/Android simulators to experience mobile apps and generate structured product reports. Works with any MCP-compatible agent platform.
 
 ## The Problem
 
@@ -169,13 +201,40 @@ Main agent                                Subagent cluster
 
 **Exploration strategy**: breadth first (all main entry points), then depth (each module in detail). Main agent only coordinates and aggregates, keeping its context clean.
 
+## Supported Agent Platforms
+
+Works with any AI agent platform that supports MCP (Model Context Protocol):
+
+| Platform | Status |
+|----------|--------|
+| Claude Code (CLI / Desktop / IDE) | Verified |
+| Cursor | Supported |
+| Windsurf | Supported |
+| Cline | Supported |
+| OpenAI Codex CLI | Supported (with MCP config) |
+| Other MCP-compatible agents | Supported |
+
 ## Prerequisites
 
-1. **Claude Code** (CLI, desktop app, or IDE extension)
-2. **mobile-mcp**:
+1. **Any MCP-compatible AI agent platform**
+2. **mobile-mcp** (install for your platform):
 
+**Claude Code:**
 ```bash
 claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
+```
+
+**Cursor / Windsurf / Cline / other IDEs:**
+Add to your MCP config file:
+```json
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+    }
+  }
+}
 ```
 
 3. **Simulator environment**:
@@ -184,13 +243,19 @@ claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
 
 ## Installation
 
-Place the skill directory under Claude Code's skills path:
+Place `SKILL.md` in your agent platform's skill directory:
 
 ```bash
+# Claude Code
 git clone https://github.com/d-wwei/product-review.git ~/.claude/skills/product-review
+
+# Codex
+git clone https://github.com/d-wwei/product-review.git .agents/skills/product-review
+
+# Other platforms: copy SKILL.md to your agent's skill/prompt directory
 ```
 
-Or manually copy `SKILL.md` to `~/.claude/skills/product-review/SKILL.md`.
+Or inject `SKILL.md` content directly as a system prompt into your agent.
 
 ## Output Structure
 
