@@ -40,6 +40,70 @@
 
 ---
 
+## list_elements 调用纪律（Context 保护）
+
+> **背景**：`mobile_list_elements_on_screen` 每次返回大量 UI 元素文本（通常 50-200 行），
+> 是 subagent context 耗尽的首要原因。实测中一个 subagent 230 次工具调用后 context 耗尽，
+> 其中 list_elements 占了大量 context 空间。
+
+### 必须调用的场景（协议要求）
+- 滚动扫描协议的 STEP A（初始快照）和 STEP B（每次滚动后对比）
+- 需要精确坐标来点击特定元素时
+
+### 禁止的模式
+- ❌ 每次 click 后都 list_elements → 改为 click → take_screenshot → 视觉判断
+- ❌ 连续两次 list_elements 中间没有任何操作（重复浪费）
+- ❌ 在报告中粘贴 list_elements 的原始输出
+
+### 推荐替代
+| 目的 | 旧方式 | 新方式 |
+|------|--------|--------|
+| 确认页面跳转 | list_elements | take_screenshot（视觉确认） |
+| 确认按钮存在 | list_elements | take_screenshot + 目视定位 |
+| 获取点击坐标 | list_elements | 先 screenshot，只在无法判断时才 list |
+| 确认滚动效果 | list_elements | 滚动扫描协议中的 list 是必须的 |
+
+### 配额规则
+- 每个 subagent 的 list_elements 调用不超过总预算的 30%
+- 如果 30 次调用中已用了 10 次 list_elements，之后优先用 screenshot
+
+---
+
+## 探索数据压缩规范（报告写入）
+
+> **背景**：探索报告文件被报告生成步骤读取。如果报告中充斥原始 list_elements 输出，
+> 会导致报告生成时 context 爆炸。
+
+### 禁止写入报告的内容
+- ❌ list_elements 的原始 XML/JSON 输出
+- ❌ 每个元素的完整属性（坐标、size、accessibility label 等）
+- ❌ 未经筛选的全部元素列表
+
+### 必须使用的压缩格式
+
+**页面元素摘要**（替代原始 list_elements）：
+
+```
+页面: {模块} > {页面名}
+布局: {顶部区域描述} | {主内容区域描述} | {底部区域描述}
+元素摘要: {关键元素×数量, ...}
+可交互: {可点击/输入的元素列表}
+Tab/标签: {如有, 列出名称}
+```
+
+**示例**：
+
+```
+页面: Markets > Overview
+布局: 搜索栏+筛选Tab | 指数卡片+股票列表 | Tab Bar
+元素摘要: 搜索栏×1 | 筛选Tab×4(US/CA/Crypto/ETF) | 指数卡片×3(S&P/DOW/NASDAQ) | 股票行×15
+可交互: 搜索框, 筛选Tab(4个), 指数卡片(3个可点击), 股票行(15个可点击), 排序按钮
+```
+
+**对比原始输出**: 压缩后约 3-5 行 vs 原始约 50-100 行，信息密度提升 10x+。
+
+---
+
 ## 数据源约束（严格执行）
 
 ### 禁止依赖第三方数据
@@ -121,6 +185,7 @@
 每个页面的探索必须做到以下所有步骤，缺一不可：
 
 ### 1. 滚动扫描协议（Scroll Scan Protocol）
+<!-- 此处为规范源。step-5-exploration.md 的 subagent prompt 中有内联副本。如需修改，请同步两处。 -->
 
 **每个页面都必须执行完整的滚动扫描。** 这是整个 skill 中最容易失败的环节——
 agent 天然倾向于"看了第一屏就觉得够了"。以下协议强制量化追踪。
@@ -279,7 +344,8 @@ STEP D: 滚动摘要（必须写入报告）
 
 ### G. 报告必须写入文件
 
-Subagent 的完整报告必须写入 `{BASE_DIR}/exploration-reports/subagent-{id}-{page}.md`。
+Subagent 的完整报告必须写入 `{BASE_DIR}/exploration-reports/subagent-{group.id}.md`。
+（一个文件包含该组所有页面的报告，按页面分节。）
 返回给主 agent 的只是不超过 20 行的摘要。这保护主 agent 的 context window。
 ```
 

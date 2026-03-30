@@ -50,15 +50,16 @@ AI agent 自主体验产品，撰写结构化体验报告。
 
 ```
 modules/
-  integrations.md              # 外部 skill 集成：能力探测 + 推荐安装 + 场景增强 (210 行)
-  step-0-4-setup.md            # 环境检查 → 设备 → App → 模式 → 目录 (192 行)
-  step-5-exploration.md        # 自主探索：广度扫描 + One-Page-One-Agent (468 行)
+  integrations.md              # 外部 skill 集成：能力探测 + 推荐安装 + 场景增强 (238 行)
+  step-0-4-setup.md            # 环境检查 → 设备 → 触控验证 → App → 模式 → 目录 (310 行)
+  step-5-exploration.md        # 自主探索：广度扫描 + 复杂度自适应分组 + 预算机制 (630 行)
   step-5.5-6-personas.md       # 用户画像 + Persona 模拟三模式 (665 行)
-  step-7-reports.md            # 报告模板：UX/手册/优化建议 (734 行)
+  step-6.5-expert-review.md    # 专家评审：工作流缺口分析 + 功能机会 + 产品创新洞察 (280 行)
+  step-7-reports.md            # 报告模板：UX/手册/优化建议/专家评审 + 主agent直写 (800 行)
   step-7.5-8-experience-bank.md # 经验沉淀 + 经验注入 (548 行)
-  protocols.md                 # 操作速查 + 数据源约束 + 深度探索协议 (286 行)
+  protocols.md                 # 操作速查 + list_elements纪律 + 数据压缩 + 深度探索协议 (352 行)
   appendix-domain-experts.md   # 领域专家原型库 (296 行)
-  setup-commands.md            # 注意事项 + 4 个 Setup 子命令 (202 行)
+  setup-commands.md            # 注意事项 + 4 个 Setup 子命令 + 多模拟器指南 (247 行)
 ```
 
 **加载规则**：执行到某个 Step 时，用 Read 工具加载对应的 modules/ 文件。
@@ -74,6 +75,7 @@ modules/
 | `/product-review manual core [App]` | 使用说明书 Core 模式（核心功能） | `manual-core.md` |
 | `/product-review manual mece [App]` | 使用说明书详尽模式（MECE 穷尽） | `manual-full.md` |
 | `/product-review suggestion [App]` | 功能/体验优化建议 | `optimization.md` |
+| `/product-review expert-review [App]` | 领域专家级产品评审（工作流缺口+功能机会+创新建议） | `expert-review.md` |
 | `/product-review playcover-setup [App]` | 配置 PlayCover iPhone 模式 | 终端输出 |
 | `/product-review android-setup [App]` | 设置 Android 模拟器环境 | 终端输出 |
 | `/product-review ios-sim-setup [App]` | 设置 iOS 模拟器环境 | 终端输出 |
@@ -88,7 +90,7 @@ modules/
 
 ```
 参数解析规则：
-1. 从参数中提取 --mode=X 和 --personas=N 标志（如有），记录后从参数中移除
+1. 从参数中提取 --mode=X、--personas=N 和 --expert-review 标志（如有），记录后从参数中移除
 2. 提取第一个词作为子命令候选
 3. 如果是 "ue-report" → 模式 = UE_REPORT，剩余参数 = App 名称
 4. 如果是 "manual"  → 读取第二个词：
@@ -100,21 +102,24 @@ modules/
    5.2 如果是 "android-setup" → 模式 = ANDROID_SETUP
    5.3 如果是 "ios-sim-setup" → 模式 = IOS_SIM_SETUP
    5.4 如果是 "ios-device-setup" → 模式 = IOS_DEVICE_SETUP
+   5.5 如果是 "expert-review" → 模式 = EXPERT_REVIEW，剩余参数 = App 名称
 6. 其他情况 → 模式 = INTERACTIVE，整个参数 = App 名称
 7. 如果提取到 --mode 标志，记录 persona_mode = A/B/C（默认 B）
 8. 如果提取到 --personas 标志，记录 persona_count = N（默认由 Step 5.5 决定）
+9. 如果提取到 --expert-review 标志，记录 EXPERT_REVIEW_ENABLED = true
 ```
 
 **模式映射：**
 
-| 模式 | 探索深度 | 报告类型 | Persona | 需加载的模块 |
-|------|----------|----------|---------|-------------|
-| UE_REPORT | 完整 | 体验报告 | 可选(默认开) | setup → exploration → personas → reports(7a) → exp-bank |
-| MANUAL_CORE | 核心功能 | 说明书 Core | 无 | setup → exploration → reports(7b) → exp-bank |
-| MANUAL_MECE | 穷尽 | 说明书 MECE | 无 | setup → exploration → reports(7b) → exp-bank |
-| SUGGESTION | 完整+模拟 | 优化建议 | 必须 | setup → exploration → personas → reports(7c) → exp-bank |
-| INTERACTIVE | 用户选择 | 用户选择 | 用户选择 | 按选择加载 |
-| *_SETUP | — | — | — | setup-commands.md 仅对应段落 |
+| 模式 | 探索深度 | 报告类型 | Persona | 专家评审 | 需加载的模块 |
+|------|----------|----------|---------|---------|-------------|
+| UE_REPORT | 完整 | 体验报告 | 可选(默认开) | 可选 | setup → exploration → personas → [expert-review] → reports(7a) → exp-bank |
+| MANUAL_CORE | 核心功能 | 说明书 Core | 无 | 可选 | setup → exploration → [expert-review] → reports(7b) → exp-bank |
+| MANUAL_MECE | 穷尽 | 说明书 MECE | 无 | 可选 | setup → exploration → [expert-review] → reports(7b) → exp-bank |
+| SUGGESTION | 完整+模拟 | 优化建议 | 必须 | 推荐 | setup → exploration → personas → [expert-review] → reports(7c) → exp-bank |
+| EXPERT_REVIEW | 完整 | 专家评审报告 | 无 | **必须** | setup → exploration → expert-review → reports(7e) → exp-bank |
+| INTERACTIVE | 用户选择 | 用户选择 | 用户选择 | 用户选择 | 按选择加载 |
+| *_SETUP | — | — | — | — | setup-commands.md 仅对应段落 |
 
 **Persona 模拟参数**（可选）：
 
@@ -123,6 +128,9 @@ modules/
 /product-review suggestion --mode=B 小红书   → 混合体验（默认）
 /product-review suggestion --mode=C WeChat   → 全评审体验
 /product-review suggestion --personas=8 抖音  → 指定 8 个 persona
+/product-review suggestion --expert-review moomoo → 优化建议 + 专家评审
+/product-review expert-review moomoo         → 仅专家评审（跳过 Persona 模拟）
+/product-review manual mece --expert-review moomoo → 详尽说明书 + 专家评审
 ```
 
 ---
@@ -150,11 +158,14 @@ Phase 0: 能力探测
 
 Phase 1: 初始化
   → Read modules/step-0-4-setup.md
-  → 执行 Step 0（环境检查）→ Step 1（设备）→ Step 2（App）→ Step 3（模式选择）→ Step 4（目录）
+  → 执行 Step 0（环境检查）→ Step 1（设备+多设备检测）→ Step 2（App）
+  → Step 2.5（触控能力验证）→ Step 3（模式选择）→ Step 4（目录）
 
 Phase 2: 探索
   → Read modules/step-5-exploration.md
-  → 执行 Step 5（广度扫描 → 探索队列 → One-Page-One-Agent → 验证补扫）
+  → 执行 Step 5（广度扫描 → 复杂度估算+分组 → 带预算的 subagent 分派 → 验证补扫）
+  → 如 TOUCH_BUG_DETECTED=true，subagent 使用触控降级策略
+  → 如 PARALLEL_MODE=true，多设备并行分派
   → 探索过程中，subagent 需要时 Read modules/protocols.md 获取操作速查和滚动协议
 
 Phase 3: Persona 模拟（仅 SUGGESTION / UE_REPORT 需要）
@@ -163,9 +174,15 @@ Phase 3: Persona 模拟（仅 SUGGESTION / UE_REPORT 需要）
   → 执行 Step 5.5（画像分析）→ Step 6（Persona 生成 + 体验 + 聚合）
   → 如果产品涉及专业领域：Read modules/appendix-domain-experts.md
 
+Phase 3.5: 专家评审（EXPERT_REVIEW 模式必须 / --expert-review 标志 / 高专业度模块推荐）
+  → Read modules/step-6.5-expert-review.md
+  → 执行 Step 6.5（识别评审模块 → 生成专家 Persona → 执行评审 → 输出 expert-review.md）
+  → 如需领域专家原型参考：Read modules/appendix-domain-experts.md
+
 Phase 4: 报告生成
-  → Read modules/step-7-reports.md（按子命令类型只看对应模板：7a/7b/7c）
+  → Read modules/step-7-reports.md（按子命令类型只看对应模板：7a/7b/7c/7e）
   → 生成报告
+  → 如有专家评审结果，suggestion 模式的 optimization.md 中引用专家评审洞察
 
 Phase 5: 经验沉淀
   → Read modules/step-7.5-8-experience-bank.md（如 Phase 3 未加载，此时加载）

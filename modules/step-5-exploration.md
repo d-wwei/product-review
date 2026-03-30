@@ -1,17 +1,19 @@
 # Step 5: 自主探索阶段
 
-> 本文件由 SKILL.md 按需加载。包含广度扫描、探索队列、One-Page-One-Agent 架构、
-> 验证补扫循环、断点恢复。滚动扫描协议的详细版本见 `protocols/scroll-scan.md`。
+> 本文件由 SKILL.md 按需加载。包含广度扫描、探索队列、复杂度自适应分组架构、
+> 工具调用预算机制、多设备并行、触控降级、验证补扫循环、断点恢复。
+> 滚动扫描协议的详细版本见 `modules/protocols.md`。
 
 ## Step 5: 自主探索阶段
 
-### 探索策略：先广度，再深度
+### 探索策略：先浅后深，按复杂度分组
 
 **主 agent 职责：**
-1. 梳理产品整体结构（Tab 数量、主入口、导航架构）
-2. 每遇到一个子功能模块，派生一个 subagent 去深入体验
-3. 汇总所有 subagent 的发现
-4. 保持自身上下文干净
+1. **浅扫**：梳理产品整体结构，每个 Tab 滚动到底，收集全部子入口
+2. **估算**：对每个子入口估算复杂度和工具调用量
+3. **分组**：按复杂度将队列项合并为 agent 组，非 one-page-one-agent
+4. **分派**：带预算地分派 subagent（按组），汇总结果
+5. 保持自身上下文干净
 
 ### 5.1 广度扫描（主 agent 执行）
 
@@ -45,10 +47,45 @@ mobile_save_screenshot                 device: <device_id>  saveTo: <path>
 
 广度扫描完成后，输出产品结构大纲到 `exploration-log.md`。
 
-### 5.1.5 构建探索队列（Exploration Queue）
+### 5.1.5 构建探索队列 + 复杂度估算 + 分组
 
-广度扫描完成后，主 agent 在深度探索之前，必须生成一个结构化的**探索队列**。
+广度扫描完成后，主 agent 在深度探索之前，必须生成一个结构化的**探索队列**并完成分组。
 此队列列出所有需要深度探索的页面/入口，是后续分派 subagent 和验证覆盖完整性的核心数据结构。
+
+#### 5.1.5a 工具调用量估算公式
+
+对每个队列项，主 agent 根据广度扫描中的观察估算工具调用量：
+
+```
+预估调用 = 导航操作(2-4)
+         + 滚动扫描(每页 6-10 次: 3次swipe + 3次list_elements + 2次screenshot + 1-2次额外)
+           × 页面内 Tab 数
+         + 交互测试(每个可交互元素 2-3 次: click + screenshot/list)
+         + 截图(每页 2-4 张)
+
+参考值:
+- 单屏简单页（无子Tab，1-2个可交互元素）: ~15 次
+- 中等页面（1-2个子Tab，3-5个可交互元素）: ~30-50 次
+- 复杂页面（3+子Tab，大量可交互元素）: ~60-80 次
+```
+
+#### 5.1.5b 复杂度自适应分组
+
+**分组规则（替代旧版 one-page-one-agent）**：
+
+| 复杂度 | 预估调用量 | 分组策略 | Agent 预算 | 示例 |
+|--------|----------|---------|-----------|------|
+| **高** | >60 次 | **独立 agent** | 80 次 | 股票详情页(6个Tab)、Settings(大量子页) |
+| **中** | 30-60 次 | **2-3 个合并一组** | 100 次/组 | Markets子tab、Discover子模块 |
+| **低** | <30 次 | **5-8 个合并一组** | 120 次/组 | 空状态页、单屏信息页、简单列表 |
+
+**分组原则**：
+1. **同 Tab 优先合并**：同一个 Tab 下的低/中复杂度页面优先分到一组（减少导航开销）
+2. **导航连续性**：组内页面按导航路径排列，避免反复跳转
+3. **预算不超限**：每组总预估调用量不超过该组的 agent 预算
+4. **高复杂度不合并**：高复杂度页面始终独立，确保 context 充裕
+
+#### 5.1.5c 写入探索队列
 
 **写入文件**：`{BASE_DIR}/exploration-queue.md`
 
@@ -57,28 +94,39 @@ mobile_save_screenshot                 device: <device_id>  saveTo: <path>
 
 ## 统计
 - 总入口数: {N}
+- 分组数: {G}（高复杂度独立 {H} 个 + 中复杂度组 {M} 个 + 低复杂度组 {L} 个）
 - 已完成: 0 (0%)
 - 待探索: {N}
 - 受限/跳过: 0
 
+## Agent 分组
+
+| 组 ID | 包含页面 | 总预估调用 | Agent 预算 | 状态 |
+|-------|---------|----------|-----------|------|
+| G1 | E1 (高-独立) | ~70 | 80 | pending |
+| G2 | E2, E3, E4 (中×3) | ~90 | 100 | pending |
+| G3 | E5-E11 (低×7) | ~100 | 120 | pending |
+| ... | | | | |
+
 ## 探索队列（Exploration Queue）
 
-| ID | 页面/入口 | 入口路径 | 预估复杂度 | 状态 | 分配给 | 滚动次数 | 到底 |
-|----|----------|---------|-----------|------|--------|---------|------|
-| E1 | {页面名} | {从首页开始的点击路径} | 高/中/低 | pending | - | - | - |
-| E2 | {页面名} | {路径} | 高/中/低 | pending | - | - | - |
-| ... | | | | | | | |
+| ID | 页面/入口 | 入口路径 | 预估复杂度 | 预估调用 | 组 | 状态 | 滚动次数 | 到底 |
+|----|----------|---------|-----------|---------|-----|------|---------|------|
+| E1 | {页面名} | {从首页开始的点击路径} | 高 | ~70 | G1 | pending | - | - |
+| E2 | {页面名} | {路径} | 中 | ~40 | G2 | pending | - | - |
+| E3 | {页面名} | {路径} | 中 | ~30 | G2 | pending | - | - |
+| ... | | | | | | | | |
 ```
 
 **复杂度分级规则**：
-- **高**：股票详情页（多个子 Tab）、Settings（大量子页面）、Assets/Portfolio 等已知多屏内容
+- **高**：股票详情页（多个子 Tab）、Settings（大量子页面）、Assets/Portfolio 等已知多屏内容、完整交易流程
 - **中**：一般功能页面（Markets 子 tab、Discover 子模块等）
 - **低**：简单列表页、空状态页、单屏信息页
 
 **队列构建原则**：
 1. **按导航效率排序**：同一个 Tab 下的页面连续排列（减少 Tab 切换开销）
 2. **同一详情页的多个子 Tab 相邻排列**（如 MSFT 的 Chart/Options/Fundamentals 连续）
-3. **每个可点击入口都是一个队列项**——不合并、不跳过
+3. **每个可点击入口都是一个队列项**——不合并、不跳过（分组在 agent 层面，不在队列层面）
 4. **Tab 类页面拆分**：如果一个页面包含多个 Tab/标签，每个 Tab 作为独立队列项
 
 **同时初始化已探索页面去重清单**：`{BASE_DIR}/explored-pages-registry.md`
@@ -98,54 +146,111 @@ mobile_save_screenshot                 device: <device_id>  saveTo: <path>
 |-------------|--------|---------|------|
 ```
 
-### 5.2 深度探索（One-Page-One-Agent 架构）
+### 5.2 深度探索（复杂度自适应分组架构）
 
-**核心规则：每个探索队列中的条目由一个独立 subagent 完成。**
+**核心规则：按复杂度分组分派 subagent，每组带明确的工具调用预算。**
 
-不论复杂度高低，每个页面/入口分派一个独立 subagent。理由：
-- 彻底消除"后半段页面被跳过"——每个 subagent 只需关注一个页面，context window 充裕
-- 即使简单页面，独立 subagent 也能确保滚动扫描协议被严格执行
-- 单设备串行约束下，subagent 逐个执行，但每个执行时间短（3-8 分钟）
+旧版 one-page-one-agent 在页面复杂度差异大时效率低下——简单页面浪费 agent 启动开销，
+复杂页面又可能 context 不足。新架构按复杂度自适应分组：
+
+| 场景 | 旧版 | 新版 |
+|------|------|------|
+| 7 个简单 Tab（如 Markets 子 tab） | 7 个 agent | 1 个 agent（组内串行） |
+| 股票详情页（6 个子 Tab） | 1 个 agent（常耗尽） | 1 个独立 agent（预算 80） |
+| 3 个中等页面 | 3 个 agent | 1 个 agent（预算 100） |
+
+#### 5.2.0 工具调用预算机制
+
+**每个 subagent 必须在 prompt 中注入以下预算参数：**
+
+```
+## ⚠️ 工具调用预算（硬性约束）
+- 总预算: {budget} 次
+- 检查点: 每 30 次调用时强制自查：
+  1. 已完成多少页面？剩余多少？
+  2. 剩余预算是否足够完成所有页面？
+  3. 如果不够 → 立即开始写报告，将未完成页面记录到"未探索入口清单"
+- 硬上限: 达到预算 90% 时（如预算 80 → 第 72 次），无论探索状态，
+  **必须立即停止探索，开始写报告并退出**
+- ⚠️ 写报告本身也消耗调用（约 2-5 次），必须为写报告预留预算
+
+## list_elements 调用纪律
+- 滚动扫描协议中的 list_elements 调用是必须的（协议要求）
+- **其他场景**：优先用 take_screenshot 判断页面内容，仅在需要精确坐标时才 list_elements
+- list_elements 配额: 不超过总预算的 30%
+- 禁止模式: "每次 click 后都 list_elements" → 改为 "click → screenshot → 必要时才 list"
+```
+
+**预算分配表**（主 agent 分派时根据分组选择）：
+
+| 组类型 | 页面数 | Agent 预算 | list_elements 配额 |
+|--------|--------|-----------|-------------------|
+| 高复杂度独立 | 1 | 80 次 | 24 次 |
+| 中复杂度组 | 2-3 | 100 次 | 30 次 |
+| 低复杂度组 | 5-8 | 120 次 | 36 次 |
+| 全局功能专项 | 跨页面 | 80 次 | 24 次 |
 
 #### 5.2.1 Subagent 分派流程
 
 ```python
-# 主 agent 按探索队列顺序，逐个分派 subagent
-# ⚠️ 单设备同一时间只能有一个 subagent 操作，必须串行
+# 主 agent 按分组顺序分派 subagent
+# ⚠️ 单设备同一时间只能有一个 subagent 操作
+# 如果 PARALLEL_MODE=true 且 DEVICES > 1，可在不同设备上并行
 
-current_device_position = "首页"  # 追踪设备当前位置
+current_device_position = {"device_1": "首页"}  # 追踪每台设备位置
 
-for entry in exploration_queue:
-    if entry.status != "pending":
+for group in agent_groups:
+    if group.status != "pending":
         continue
 
-    # 更新队列状态
-    entry.status = "in_progress"
-    entry.assigned_to = f"subagent-{entry.id}"
+    # 选择设备（并行模式下轮询可用设备）
+    device = select_available_device(DEVICES)
+
+    # 更新组状态
+    group.status = "in_progress"
+
+    # 构建组内页面列表
+    pages_in_group = [entry for entry in exploration_queue if entry.group == group.id]
+    budget = group.budget  # 根据分组类型确定
 
     Agent(
         prompt=f"""
-你是页面探索员。目标：深度探索一个页面。
+你是页面探索员。目标：深度探索以下 {len(pages_in_group)} 个页面。
 
-## 目标页面：{entry.page_name}
-## 入口路径：{entry.entry_path}
-## 设备 ID：{device_id}
+## 目标页面列表（按导航顺序）
+{format_pages_table(pages_in_group)}
+
+## 设备 ID：{device}
 ## 截图目录：{screenshots_dir}
-## 报告输出文件：{BASE_DIR}/exploration-reports/subagent-{entry.id}-{entry.page_slug}.md
-## 设备当前位置：{current_device_position}
+## 报告输出文件：{BASE_DIR}/exploration-reports/subagent-{group.id}.md
+## 设备当前位置：{current_device_position[device]}
+
+## ⚠️ 工具调用预算（硬性约束）
+- 总预算: {budget} 次
+- 检查点: 每 30 次调用时强制自查——是否应开始写报告
+- 硬上限: 达到预算 90% 时，立即写报告并退出
+- list_elements 配额: {int(budget * 0.3)} 次
 
 ## 已探索页面（不需要重复进入）
 {explored_pages_list}
 
-## 任务（严格按顺序执行）
-1. 从当前设备位置导航到目标页面（入口路径仅供参考，从当前位置选最短路径）
-2. 执行滚动扫描协议（见下方，至少3次滚动 + 元素对比 + 摘要）
+{touch_bug_section if TOUCH_BUG_DETECTED else ""}
+
+## 任务（按顺序逐个探索组内每个页面）
+对组内每个页面执行：
+1. 从当前设备位置导航到目标页面（选最短路径）
+2. 执行滚动扫描协议（至少3次滚动 + 元素对比 + 摘要）
 3. 点击页面上的每个入口/按钮/Tab，进入子页面后也执行滚动扫描
 4. 实际操作可交互功能（搜索框输入、筛选切换、表单填写等）
-5. 将报告写入指定的报告输出文件
-6. 将设备导航回底部 Tab 首页之一（优先选与下一个目标最近的 Tab）
+5. 完成后导航到下一个目标页面
+
+所有页面探索完毕后：
+6. 将报告写入指定的报告输出文件（一个文件包含所有页面的报告）
+7. 将设备导航回底部 Tab 首页之一
 
 ## ⚠️ 滚动扫描协议（每个页面必须执行，不可跳过）
+<!-- 规范源: modules/protocols.md "滚动扫描协议" 节。此处为内联副本供 subagent 直接使用。
+     如需修改协议，请同步更新两处。 -->
 
 ```
 STEP A: 初始快照
@@ -164,13 +269,10 @@ STEP B: 滚动循环（增强版，含无限滚动检测）
       → scroll_count >= 3 且 same_count >= 2 → 退出
 
       // ⚠️ 无限滚动检测
-      → 如果连续 3 次滚动都出现新的同类型列表项（如帖子、新闻、股票行）：
+      → 如果连续 3 次滚动都出现新的同类型列表项：
         1. 标注 [无限滚动列表]
-        2. 记录列表项结构特征（每条包含哪些字段）
-        3. 记录已看到的条目数量
-        4. **立即停止滚动**
-        5. 备注："此页面为无限加载列表，已采样 {{N}} 条内容，
-           列表结构为 {{描述}}。继续滚动不会产生新的功能发现。"
+        2. 记录列表项结构特征 + 已看到条目数量
+        3. **立即停止滚动**
 
       // 安全上限
       → scroll_count >= 15 → 强制退出
@@ -185,17 +287,8 @@ STEP D: 滚动摘要
      末屏: {{Nf}}个 | 新增: {{total_new}} | 到底: {{是/否}} | 底部: {{标志}}"
 ```
 
-无限滚动典型特征（供参考判断）：
-| 特征 | 说明 |
-|------|------|
-| 列表项结构重复 | 每条都是 头像+用户名+内容+时间+互动按钮 |
-| 持续加载新内容 | 每次滚动后 list_elements 都有新的同结构元素 |
-| 无固定底部 | 没有版权信息、"已加载全部"等底部标志 |
-| loading 指示器 | 底部有旋转加载动画或"加载中"文字 |
-
 ## 页面内多 Tab 处理规则
-如果目标页面包含多个 Tab/标签（如股票详情页的 Chart/Options/Fundamentals/Comments/News/Analysis），
-**每个 Tab 都是独立的第 1 层页面，都必须逐一点击并执行滚动扫描协议。**
+如果目标页面包含多个 Tab/标签，**每个 Tab 都是独立页面，必须逐一点击并执行滚动扫描协议。**
 不可只探索第一个 Tab 就返回。
 
 ## 去重规则
@@ -269,15 +362,28 @@ STEP D: 滚动摘要
 3. 绝不自行输入或猜测密码
 4. 用户选择跳过时，记录到"未探索入口清单"
 
+## 报告数据压缩规范（重要！）
+报告中**禁止**写入原始 list_elements 输出。改用结构化摘要：
+
+正确：
+  "页面: Markets > Overview
+   元素摘要: 顶部搜索栏 | 市场指数卡片×3 | 热门股票列表(15条) | 底部广告banner
+   可交互: 搜索框, 指数卡片(可点击), 股票行(可点击), 筛选Tab×4"
+
+错误：
+  （粘贴 list_elements 返回的完整 XML/JSON 元素列表）
+
 ## 输出要求
 
 ### 报告必须写入文件
-将完整报告写入：{{BASE_DIR}}/exploration-reports/subagent-{{entry.id}}-{{page_slug}}.md
+将完整报告写入：{{BASE_DIR}}/exploration-reports/subagent-{{group.id}}.md
+一个文件包含组内所有页面的报告，按页面分节。
 
 ### 返回给主 agent 的只是摘要（不超过 20 行）
-"页面: {{name}} | 状态: 完成/接力/受限 | 滚动: {{N}}次 | 到底: 是/否 |
- 新发现入口: {{数量}} | 截图: {{数量}}张 | 报告: {{文件路径}}
- 新探索的页面标识: {{列表}}
+"组: {{group.id}} | 页面数: {{N}} | 完成: {{done}} | 受限: {{restricted}} |
+ 总工具调用: {{count}}/{{budget}} | 报告: {{文件路径}}
+ 各页面状态: {{页面名: 完成/接力/受限, ...}}
+ 新发现入口: {{数量}}
  性能问题: {{如有}}"
 
 ### 报告末尾必须包含：
@@ -290,19 +396,51 @@ STEP D: 滚动摘要
 #### 【未探索入口清单】（必须，即使为空也要写"无"）
 | 入口名称 | 发现位置 | 未探索原因 | 建议处理 |
 |---------|---------|-----------|---------|
-| {{名称}} | {{位置}} | {{原因}} | 需新subagent/标记受限/... |
+| {{名称}} | {{位置}} | {{原因}} | 标记受限/下轮补扫/... |
 | 无 | - | - | - |
 
 没有滚动覆盖汇总表或未探索入口清单 = 探索不合格。
 """,
-        description=f"探索 {{entry.page_name}}"
+        description=f"探索组 {{group.id}}: {{group.pages_summary}}"
     )
 
     # subagent 完成后更新队列和去重清单
-    current_device_position = subagent_result.device_position
-    entry.status = "completed" / "relay_needed" / "restricted"
+    current_device_position[device] = subagent_result.device_position
+    for entry in pages_in_group:
+        entry.status = subagent_result.page_statuses[entry.id]
     update_explored_pages_registry(subagent_result.explored_pages)
     add_new_entries_to_queue(subagent_result.unexplored_entries)
+    # ⚠️ 每个 subagent 完成后立即 Edit 更新 exploration-queue.md
+    update_exploration_queue_file()
+```
+
+#### 5.2.1.5 触控降级探索策略
+
+**当 `TOUCH_BUG_DETECTED=true`（Step 2.5 检测到模拟器触控 bug）时**，
+在每个 subagent prompt 中额外注入以下指令：
+
+```
+## ⚠️ 触控受限模式（模拟器触控映射 Bug）
+此设备在列表/可滚动区域点击 cell 时会触发 swipe-to-home，导致 App 退出桌面。
+
+### 禁止操作
+- 不要直接点击列表中的 cell（如自选股列表中的股票行、搜索结果列表中的条目）
+- 不要在可滚动区域的中间位置点击
+
+### 替代导航路径（按优先级尝试）
+1. **搜索导航**：用搜索功能输入具体名称 → 从搜索结果中点击进入
+   （搜索结果的点击区域可能不在列表 bug 区域内）
+2. **深链接**：用 mobile_open_url 直接打开目标页面（如果 App 支持 URL Scheme）
+3. **非列表区域入口**：尝试从顶部导航、卡片视图、banner 等非列表区域进入
+4. **手动接力**：通过 AskUserQuestion 请求用户手动点击进入特定页面
+
+### 安全点击区域（经验证的）
+{verified_safe_zones}
+
+### 在报告中标注
+遇到因触控 bug 无法进入的页面，在"未探索入口清单"中标注：
+原因: [触控受限-列表区域点击触发swipe-to-home]
+建议处理: 需真机测试 / 需用户手动接力
 ```
 
 #### 5.2.2 长页面接力机制（Relay Protocol）
@@ -339,9 +477,33 @@ STEP D: 滚动摘要
 
 3. Subagent 从当前位置出发导航，不假设在首页。
 
-4. 主 agent 按导航效率排序探索队列：
-   - 同一 Tab 下的页面连续探索
-   - 同一详情页的多个子 Tab 由相邻 subagent 探索
+4. 组内页面已按导航效率排序：
+   - 同一 Tab 下的页面在同一组内连续探索
+   - 同一详情页的多个子 Tab 由同一 subagent 连续探索
+```
+
+#### 5.2.4 多设备并行分派（PARALLEL_MODE=true 时）
+
+```
+如果 PARALLEL_MODE=true 且 DEVICES.length > 1:
+
+1. 将 agent_groups 拆分为 N 个设备队列（N = 设备数）
+   - 按总预估调用量均衡分配
+   - 同一 Tab 的组优先分到同一设备（减少 App 启动/切换次数）
+
+2. 每台设备的 App 都需要独立启动：
+   for device in DEVICES:
+       mobile_launch_app(device, packageName)
+
+3. 不同设备上的 subagent 可并行分派（用 Agent 工具的并行调用）
+
+4. 每台设备内部仍然串行（一台设备同一时间只有一个 subagent 操作）
+
+5. 并行分派示例（2 台设备）：
+   # 同时分派两个 agent，各操作不同设备
+   Agent(prompt="...device_1...", description="设备1-探索组G1")
+   Agent(prompt="...device_2...", description="设备2-探索组G2")
+   # 两者并行执行，各自的下一组串行等待
 ```
 
 ### 5.3 全局功能专项探索 + 特殊维度检查
