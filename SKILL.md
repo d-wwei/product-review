@@ -1,7 +1,8 @@
 ---
 name: product-review
 description: |
-  Use when the user asks to experience, review, or evaluate a mobile app.
+  Use when the user asks to experience, review, or evaluate an app or product.
+  Supports mobile apps (iOS/Android), desktop apps (macOS), and web apps.
   Trigger phrases: "体验一下 [App]", "写一份 [App] 的产品体验报告",
   "测评 [App]", "product review", "review this app".
   Subcommands: ue-report, manual core, manual mece, suggestion, playcover-setup, android-setup, ios-sim-setup, ios-device-setup.
@@ -31,10 +32,14 @@ allowed-tools:
 
 # Product Review
 
-AI agent 自主体验移动端产品，撰写结构化产品体验报告。
+AI agent 自主体验产品，撰写结构化体验报告。
 
-通过 mobile-mcp 控制 iOS/Android 模拟器，系统性浏览 App 的每个功能，
-截图记录，最终输出专业的产品体验报告、使用说明书或优化建议。
+支持三类产品平台：
+- **移动 App**（iOS/Android）→ 通过 mobile-mcp 控制模拟器
+- **桌面 App**（macOS）→ 通过 macos-desktop-control 操控（可选安装）
+- **Web App** → 通过 browser-control-skill 控制 Chrome（可选安装）
+
+只有 mobile-mcp 是硬依赖。桌面和 Web 能力缺失时优雅降级，不阻断流程。
 
 ---
 
@@ -45,6 +50,7 @@ AI agent 自主体验移动端产品，撰写结构化产品体验报告。
 
 ```
 modules/
+  integrations.md              # 外部 skill 集成：能力探测 + 推荐安装 + 场景增强 (210 行)
   step-0-4-setup.md            # 环境检查 → 设备 → App → 模式 → 目录 (192 行)
   step-5-exploration.md        # 自主探索：广度扫描 + One-Page-One-Agent (468 行)
   step-5.5-6-personas.md       # 用户画像 + Persona 模拟三模式 (665 行)
@@ -135,6 +141,13 @@ modules/
 ### Review 子命令（主流程）
 
 ```
+Phase 0: 能力探测
+  → Read modules/integrations.md
+  → 检测 mobile-mcp / desktop_control / browser_control 可用性
+  → 构建能力注册表：CAPABILITIES = { mobile_mcp, desktop_control, browser_control }
+  → 如有缺失的可选能力，输出安装建议（不阻断）
+  → 根据目标产品类型（移动/桌面/Web）确定主工具集
+
 Phase 1: 初始化
   → Read modules/step-0-4-setup.md
   → 执行 Step 0（环境检查）→ Step 1（设备）→ Step 2（App）→ Step 3（模式选择）→ Step 4（目录）
