@@ -36,10 +36,11 @@ AI agent 自主体验产品，撰写结构化体验报告。
 
 支持三类产品平台：
 - **移动 App**（iOS/Android）→ 通过 mobile-mcp 控制模拟器
-- **桌面 App**（macOS）→ 通过 macos-desktop-control 操控（可选安装）
+- **桌面 App**（macOS）→ 通过 macos-desktop-control 操控（可选安装，同时提供截图压缩/切片能力）
 - **Web App** → 通过 browser-control-skill 控制 Chrome（可选安装）
 
 只有 mobile-mcp 是硬依赖。桌面和 Web 能力缺失时优雅降级，不阻断流程。
+**强烈推荐**安装 macos-desktop-control：Retina 高清屏截图经压缩后传入 LLM，token 节省 95%+，详见 `protocols.md` 截图优化协议。
 
 ---
 

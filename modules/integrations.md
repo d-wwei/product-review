@@ -29,7 +29,9 @@ fi
 
 | 能力 | 工具 | 用途 |
 |------|------|------|
-| 桌面截图 | `mcp__macos-desktop-control__screenshot` | 截取桌面 App / PlayCover App |
+| 桌面截图 | `mcp__macos-desktop-control__screenshot` | 截取桌面 App / PlayCover App / 模拟器窗口 |
+| **截图压缩** | `screenshot` + `compression` 参数 | **高清屏截图压缩后传入 LLM，节省 95%+ token**（详见 protocols.md 截图优化协议） |
+| **截图切片** | `screenshot` + `tile` 参数 | 密集数据页面分片分析（期权链、财务报表等） |
 | 鼠标点击 | `mcp__macos-desktop-control__click` | 桌面 UI 交互（支持后台模式） |
 | 键盘输入 | `mcp__macos-desktop-control__type_text` | 表单填写 |
 | 按键操作 | `mcp__macos-desktop-control__key_press` | 快捷键、导航 |
@@ -44,13 +46,16 @@ fi
 在 Step 0 输出中提示（不阻断执行）：
 
 ```
-💡 可选增强：安装 macos-desktop-control 可解锁桌面 App 测试和后台操控能力。
+💡 推荐安装：macos-desktop-control 可解锁截图优化和桌面 App 测试能力。
 
   git clone https://github.com/d-wwei/macos-desktop-control.git ~/mcp-servers/macos-desktop-control
   cd ~/mcp-servers/macos-desktop-control && npm install
   claude mcp add macos-desktop-control -- node ~/mcp-servers/macos-desktop-control/src/index.js
 
-  能力：桌面 App 控制 / 后台模式（不抢焦点）/ PlayCover iOS App / 模拟器直控
+  关键能力：
+  · 📸 截图压缩 — Retina 高清屏截图压缩后再传入 LLM，token 节省 95%+（强烈推荐）
+  · 🔲 截图切片 — 密集数据页面分片分析，避免压缩丢失细节
+  · 🖥️ 桌面 App 控制 / 后台模式（不抢焦点）/ PlayCover iOS App / 模拟器直控
 ```
 
 ### 2. Browser Control Skill（Claude Code Skill）

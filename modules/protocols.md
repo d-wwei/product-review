@@ -50,6 +50,53 @@
 
 ---
 
+## 截图优化协议（高清屏 Context 保护）
+
+> **背景**：Retina 屏幕上模拟器截图通常 5-10 MB，直接传入大模型占用过多上下文，
+> 甚至超过 API 输入限制。利用 macOS Desktop Control 的压缩/切图能力解决。
+
+### 前置条件
+
+`HAS_DESKTOP_CONTROL=true`（已安装 macos-desktop-control MCP Server）。
+未安装时回退到 `mobile_take_screenshot`（无压缩），Step 0 提示安装。
+
+### 双轨策略：原图存档 + 压缩分析
+
+```
+Step 1（存档）: mobile_save_screenshot  saveTo: {path}.png
+  → 原始分辨率存盘，供报告配图
+
+Step 2（LLM 分析）: mcp__macos-desktop-control__screenshot
+  → target: { app: "Simulator" }   # Android: { app: "Android Emulator" }
+  → compression: "medium"           # 默认档位，见下方档位表
+  → 压缩后传入 LLM，节省 95%+ 的 token
+```
+
+**`HAS_DESKTOP_CONTROL=true` 时，所有 `mobile_take_screenshot` 视觉确认场景均替换为压缩截图。**
+
+### 压缩档位
+
+| 场景 | compression | 效果 |
+|------|------------|------|
+| 确认页面跳转/操作成功 | `high` | 800px / q50（最省 token） |
+| 分析页面布局和功能 | `medium` | 1280px / q70（**默认**） |
+| 读取小字/费率表/注释 | `low` | 2048px / q85 |
+
+### 密集页面切图
+
+期权链、财务报表等数据密集页面，用 tile 分片避免压缩后细节丢失：
+
+```
+mcp__macos-desktop-control__screenshot
+  target: { app: "Simulator" }
+  tile: { rows: 2, cols: 1 }
+  compression: "low"
+
+# 逐片获取: screenshot_tile  id: {tile_id}  index: 0/1
+```
+
+---
+
 ## list_elements 调用纪律（Context 保护）
 
 > **背景**：`mobile_list_elements_on_screen` 每次返回大量 UI 元素文本（通常 50-200 行），
