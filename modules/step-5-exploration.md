@@ -255,7 +255,17 @@ for group in agent_groups:
     pages_in_group = [entry for entry in exploration_queue if entry.group == group.id]
     safety_ceiling = 300  # 安全上限，仅防崩溃，不是目标
 
+    # 根据探索质量策略选择模型
+    # EXPLORATION_MODEL 和 ANALYSIS_MODEL 在 Step 3 中由用户选择设定
+    # 效果优先: 两者都是 "opus"
+    # 成本平衡: EXPLORATION_MODEL="sonnet", ANALYSIS_MODEL="opus"
+    agent_model = EXPLORATION_MODEL  # 默认用探索模型
+    # 以下组类型需要判断力，使用分析模型（即使在成本平衡模式下也用 Opus）
+    if group.type in ["stock_detail", "trade_flow", "settings", "ai_chat", "global_features"]:
+        agent_model = ANALYSIS_MODEL
+
     Agent(
+        model=agent_model,  # 效果优先=opus, 成本平衡=按组类型选择
         prompt=f"""
 你是页面探索员。目标：**彻底**深度探索以下 {len(pages_in_group)} 个页面。
 

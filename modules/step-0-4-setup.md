@@ -50,7 +50,7 @@ mobile_list_available_devices
 - 系统版本
 - **设备类型**（simulator / emulator / device）
 
-**多设备检测**：
+**多设备检测与并行建议**：
 ```
 如果返回的可用设备 > 1 台：
   记录 DEVICES = [device_1, device_2, ...]
@@ -60,6 +60,35 @@ mobile_list_available_devices
      并行模式可将探索时间缩短约 {N}x。"
   如果用户同意 → PARALLEL_MODE = true
   否则 → 使用用户选择的单台设备
+
+如果只有 1 台设备：
+  评估用户环境，提供多设备并行建议：
+
+  用 AskUserQuestion 询问（header: "并行加速"）：
+    "当前只有 1 台设备，完整探索预计 12-13 小时（串行）。
+     增加设备可大幅缩短时间。根据你的环境，以下哪种方案可行？"
+
+  选项：
+  A. 连接 iOS/Android 真机（推荐，零额外资源）
+     → 执行 ios-device-setup 或提示用户用 USB 连接 Android 真机
+     → 真机 + 模拟器并行，时间减半
+     → 额外收益：可同时对比两个平台的差异
+
+  B. 再启动一个模拟器（需要足够 RAM）
+     → Android: 检查可用 RAM，如果 > 8GB 可用：
+       emulator -avd <name> -port 5556 -no-window &
+       adb -s emulator-5556 install <app.apk>
+     → iOS: 创建不同机型的 Simulator
+       xcrun simctl create "iPhone-15" "iPhone 15" "iOS-17-0"
+       xcrun simctl boot <new_device_id>
+     → 提醒用户：每个模拟器需 3-4GB RAM
+
+  C. 保持单设备（时间换成本）
+     → 无需额外操作，串行执行
+
+  如果用户选 A 或 B：
+    → 引导完成设备准备后，重新执行 mobile_list_available_devices
+    → 确认新设备在线后设置 PARALLEL_MODE = true
 ```
 
 获取屏幕尺寸：
@@ -234,6 +263,40 @@ ALTERNATIVE_NAV_STRATEGIES = ["search_navigation", "deep_link", "manual_handoff"
 如果子命令路由已确定模式，跳过此步。
 
 否则，用 AskUserQuestion 让用户选择：
+
+### 探索质量策略
+
+用 AskUserQuestion 询问（header: "探索策略"）：
+
+| 策略 | 说明 | 预估成本 | 预估时间 |
+|------|------|---------|---------|
+| **效果优先** | 所有 agent 使用最强模型（Opus），探索深度和发现能力最大化 | ~$45/次 | ~13h（单设备） |
+| **成本平衡** | 分层使用模型——机械探索用 Sonnet，分析和报告用 Opus，成本降 40% | ~$27/次 | ~13h（单设备） |
+
+```
+如果用户选择"效果优先"：
+  EXPLORATION_MODEL = "opus"     # 所有 subagent 使用 Opus
+  ANALYSIS_MODEL = "opus"
+
+如果用户选择"成本平衡"：
+  EXPLORATION_MODEL = "sonnet"   # 探索类 subagent 使用 Sonnet
+  ANALYSIS_MODEL = "opus"        # 分析类 subagent 使用 Opus
+
+分层规则（成本平衡模式下）：
+  Sonnet 执行（机械探索）：
+    - 广度扫描 agent
+    - Markets 各子Tab 滚动扫描 + 模块记录
+    - 简单页面组（低复杂度组）的深度探索
+    - 补扫 agent
+
+  Opus 执行（需要判断力）：
+    - Stock Detail 页面（需要对比 US vs CA 差异）
+    - 交易流程探索（需要理解金融概念）
+    - Settings/Me 等隐藏入口探索（需要好奇心）
+    - AI 对话探索（需要评估回答质量）
+    - 全局功能探索（需要跨页面关联能力）
+    - Persona 生成、专家评审、报告撰写（需要深度分析）
+```
 
 ### 探索模式
 
