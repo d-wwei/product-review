@@ -65,10 +65,11 @@ mobile_list_available_devices
   评估用户环境，提供多设备并行建议：
 
   用 AskUserQuestion 询问（header: "并行加速"）：
-    "当前只有 1 台设备。每个功能页面的探索约需 25-35 分钟，
-     所有 agent 组串行执行。增加设备可按比例缩短时间：
+    "当前只有 1 台设备，所有探索 agent 串行执行。
+     增加设备可按比例缩短探索时间：
      · 2 台设备 → 时间减少约 45%
      · 3 台设备 → 时间减少约 60%
+     （具体耗时取决于产品复杂度，广度扫描后会给出精确估算）
      根据你的环境，以下哪种方案可行？"
 
   选项：
@@ -269,27 +270,44 @@ ALTERNATIVE_NAV_STRATEGIES = ["search_navigation", "deep_link", "manual_handoff"
 
 ### 探索质量策略
 
-先根据广度扫描结果（Step 5.1 完成后）估算产品规模，再让用户选择策略：
+在广度扫描完成、探索队列构建后（Step 5.1.5 完成），基于队列数据动态估算时间和成本，再让用户选择策略。
 
 ```
-产品规模估算（广度扫描后自动计算）：
-  pages = 探索队列中的总入口数
-  groups = agent 分组数
-  est_time_per_group = 30 min（单设备平均，含导航+滚动+交互+报告）
-  est_total_time = groups × est_time_per_group / device_count
-  est_cost_opus = groups × 0.30 × 5（input）+ groups × 0.05 × 25（output）
-  est_cost_mixed = est_cost_opus × 0.6（约省 40%）
+产品规模估算（基于探索队列自动计算）：
+
+  # 基础常量（由 mobile-mcp 延迟决定，跨 App 基本恒定）
+  SECONDS_PER_CALL = 8  # 每次工具调用约 8 秒（含截图/元素获取/点击响应）
+
+  # 从探索队列中汇总
+  total_estimated_calls = sum(entry.estimated_calls for entry in exploration_queue)
+  # 按页面复杂度参考值（5.1.5a）：
+  #   单屏简单页 ~20 次 → ~3 min
+  #   中等页面   ~60 次 → ~8 min
+  #   复杂页面  ~150 次 → ~20 min
+  #   超级复杂  ~400 次 → ~53 min
+
+  est_total_seconds = total_estimated_calls × SECONDS_PER_CALL
+  est_total_time = est_total_seconds / 60 / device_count  # 分钟，多设备按比例缩短
+
+  # 成本估算（Opus 4.6 定价: input $5/M, output $25/M）
+  # 每次调用约消耗 ~1200 token（input 1000 + output 200）
+  est_tokens = total_estimated_calls × 1200
+  est_cost_opus = est_tokens × 0.001 × 5 + est_tokens × 0.0002 × 25  # 粗估
+  est_cost_mixed = est_cost_opus × 0.6
 ```
 
 用 AskUserQuestion 询问（header: "探索策略"）：
 
-"产品规模估算：{pages} 个入口，{groups} 个 agent 组。
- 单设备预计耗时 {est_total_time}（每组约 25-35 分钟）。请选择探索策略："
+"产品规模估算：{total_entries} 个入口，{groups} 个 agent 组，
+ 预计 ~{total_estimated_calls} 次工具调用。
+ 单设备预计耗时约 {est_total_time} 分钟
+ （简单页面约 3 分钟，中等页面约 8 分钟，复杂页面约 20 分钟）。
+ 请选择探索策略："
 
 | 策略 | 说明 | 预估成本 | 预估时间 |
 |------|------|---------|---------|
-| **效果优先** | 所有 agent 使用最强模型，探索深度和隐藏功能发现能力最大化 | ~${est_cost_opus} | {est_total_time} |
-| **成本平衡** | 分层模型——机械探索用轻量模型，分析报告用最强模型，成本降约 40% | ~${est_cost_mixed} | {est_total_time} |
+| **效果优先** | 所有 agent 使用最强模型，探索深度和隐藏功能发现能力最大化 | ~${est_cost_opus} | ~{est_total_time} min |
+| **成本平衡** | 分层模型——机械探索用轻量模型，分析报告用最强模型，成本降约 40% | ~${est_cost_mixed} | ~{est_total_time} min |
 
 ```
 如果用户选择"效果优先"：
