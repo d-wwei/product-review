@@ -185,16 +185,7 @@ Phase 4: 报告生成
     → 总行数 > 2000 或文件数 > 6：启用分批读取 + 拆分 agent 模式
   → **拆分策略**（大型报告必须拆分，不可交给单个 agent）：
     → expert-review：按评审模块拆分为多个 subagent，每个读 1-2 个报告，主 agent 合并
-    → manual-full：**v3 总-分流程**（详见 step-7-reports.md 7b-B 节）：
-      1. 主 agent 先读取所有 exploration-reports，构建功能全景图
-      2. 主 agent **亲自撰写**一~三章（产品概述 + 安装注册 + 主界面导航）
-      3. 主 agent 确定一级模块列表和章节编号（每个底部 Tab = 一个独立章节）
-      4. 按一级模块拆分 subagent：
-         - **每个 subagent 只负责一个一级模块**（即一个底部 Tab）
-         - 禁止把多个 Tab 合并到同一个 subagent
-         - subagent 输出以 "## X.0 模块概览" 开头，不含全局标题
-      5. 主 agent 合并：一~三章 + 各模块章节 + 尾部章节（账户设置/FAQ/附录）
-      6. **合并后校验**：一~三章完整 + 章节编号连续 + 无 Part 分割痕迹 + 只有一个一级标题
+    → manual-full：按一级模块拆分为多个 subagent，各写一部分，主 agent 合并
     → optimization：主 agent 在 prompt 中内嵌精简摘要（<4000字），不让 agent 读大文件
     → report / manual-core：通常在阈值内，主 agent 可直写
   → 每份报告独立生成（串行），不在同一 agent 中同时写多份
