@@ -28,6 +28,16 @@
 | 录屏开始 | `mobile_start_screen_recording` | device |
 | 录屏结束 | `mobile_stop_screen_recording` | device |
 
+### 坐标验证协议（防止视觉位置与实际坐标偏差）
+
+实测发现底部 Tab 栏的视觉位置（截图中 y≈1880）与实际可点击坐标（y=1766）存在偏差。
+
+**规则**：
+1. **固定 UI 元素必须用 list_elements 获取精确坐标**（Tab 栏、导航栏、浮动按钮），不可凭截图视觉估算
+2. **点击验证**：点击后 take_screenshot 确认页面变化。未变化 → 重新 list_elements 获取最新坐标 → 重试
+3. **坐标锚点缓存**：同一页面内首次获取的关键坐标可复用，页面切换后失效
+4. **禁止**：连续 2 次用相同的估算坐标重试。第 2 次失败后必须 list_elements 获取真实坐标
+
 ### 操作要点
 
 1. **先 list 再 click**：每次操作前用 `mobile_list_elements_on_screen` 获取坐标，不要猜测坐标
@@ -63,9 +73,24 @@
 | 获取点击坐标 | list_elements | 先 screenshot，只在无法判断时才 list |
 | 确认滚动效果 | list_elements | 滚动扫描协议中的 list 是必须的 |
 
-### 配额规则
-- 每个 subagent 的 list_elements 调用不超过总预算的 30%
-- 如果 30 次调用中已用了 10 次 list_elements，之后优先用 screenshot
+### 使用指引
+- 无百分比配额限制，根据实际需要合理使用
+- 滚动扫描协议中的 list_elements 是必须的，其他场景按需使用
+- 如果发现连续多次 list_elements 且中间没有实际操作，应反思是否有更高效的方式
+
+### 错误重试机制
+
+`mobile_list_elements_on_screen` 偶现瞬态故障（如 "Cannot read properties of undefined"）。
+
+```
+重试协议：
+1. 第一次失败 → 等待 1 秒 → 重试
+2. 第二次失败 → swipe down + swipe up（触发 UI 树重建）→ 等待 2 秒 → 重试
+3. 第三次失败 → 降级为 take_screenshot 视觉判断模式：
+   - 用截图查看页面，估算坐标（参考已知元素坐标作为锚点）
+   - 报告中标注 "[list_elements 不可用-已降级为视觉模式]"
+不要因为一次失败就放弃当前页面的探索。
+```
 
 ---
 

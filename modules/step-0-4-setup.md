@@ -95,6 +95,33 @@ mobile_launch_app  device: <device_id>  packageName: <package_name>
 mobile_take_screenshot  device: <device_id>
 ```
 
+### App 启动失败 Fallback
+
+如果 `mobile_launch_app` 失败但 `list_apps` 中确认 App 存在，执行 fallback：
+
+**Android**：
+```bash
+# 查找 LaunchActivity
+adb -s <device_id> shell cmd package resolve-activity --brief <package_name> | tail -1
+# 用 am start 直接启动
+adb -s <device_id> shell am start -n "<package_name>/<activity_name>"
+```
+
+**iOS**：
+```bash
+xcrun simctl launch <device_id> <bundle_id>
+```
+
+**adb 路径查找**（如果 `adb` 不在 PATH 中）：
+```bash
+# macOS 常见路径
+mdfind -name "adb" 2>/dev/null | grep platform-tools | head -1
+# 或
+~/Library/Android/sdk/platform-tools/adb
+```
+
+启动后截图验证。如果仍失败，通过 AskUserQuestion 告知用户。
+
 ---
 
 ## Step 2.5: 触控能力验证（iOS 模拟器必须执行）

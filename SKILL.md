@@ -52,7 +52,7 @@ AI agent 自主体验产品，撰写结构化体验报告。
 modules/
   integrations.md              # 外部 skill 集成：能力探测 + 推荐安装 + 场景增强 (238 行)
   step-0-4-setup.md            # 环境检查 → 设备 → 触控验证 → App → 模式 → 目录 (310 行)
-  step-5-exploration.md        # 自主探索：广度扫描 + 复杂度自适应分组 + 预算机制 (630 行)
+  step-5-exploration.md        # 自主探索：广度扫描 + 细粒度分组 + 完成驱动机制 (700 行)
   step-5.5-6-personas.md       # 用户画像 + Persona 模拟三模式 (665 行)
   step-6.5-expert-review.md    # 专家评审：工作流缺口分析 + 功能机会 + 产品创新洞察 (280 行)
   step-7-reports.md            # 报告模板：UX/手册/优化建议/专家评审 + 主agent直写 (800 行)
@@ -163,7 +163,7 @@ Phase 1: 初始化
 
 Phase 2: 探索
   → Read modules/step-5-exploration.md
-  → 执行 Step 5（广度扫描 → 复杂度估算+分组 → 带预算的 subagent 分派 → 验证补扫）
+  → 执行 Step 5（广度扫描 → 复杂度估算+细粒度分组 → 完成驱动的 subagent 分派 → 验证补扫）
   → 如 TOUCH_BUG_DETECTED=true，subagent 使用触控降级策略
   → 如 PARALLEL_MODE=true，多设备并行分派
   → 探索过程中，subagent 需要时 Read modules/protocols.md 获取操作速查和滚动协议
@@ -181,7 +181,15 @@ Phase 3.5: 专家评审（EXPERT_REVIEW 模式必须 / --expert-review 标志 / 
 
 Phase 4: 报告生成
   → Read modules/step-7-reports.md（按子命令类型只看对应模板：7a/7b/7c/7e）
-  → 生成报告
+  → **规模预判**：统计 exploration-reports/ 文件数和总行数
+    → 总行数 > 2000 或文件数 > 6：启用分批读取 + 拆分 agent 模式
+  → **拆分策略**（大型报告必须拆分，不可交给单个 agent）：
+    → expert-review：按评审模块拆分为多个 subagent，每个读 1-2 个报告，主 agent 合并
+    → manual-full：按一级模块拆分为多个 subagent，各写一部分，主 agent 合并
+    → optimization：主 agent 在 prompt 中内嵌精简摘要（<4000字），不让 agent 读大文件
+    → report / manual-core：通常在阈值内，主 agent 可直写
+  → 每份报告独立生成（串行），不在同一 agent 中同时写多份
+  → 生成后验证：Read 报告确认行数和章节完整性
   → 如有专家评审结果，suggestion 模式的 optimization.md 中引用专家评审洞察
 
 Phase 5: 经验沉淀
