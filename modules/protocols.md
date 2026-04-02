@@ -252,6 +252,18 @@ STEP B: 滚动循环（增强版，含无限滚动检测 + 接力机制）
       // 接力阈值：scroll_count >= 10 且不是无限滚动 且仍有新内容 → 触发接力机制
       → 否则继续 LOOP
 
+STEP B.5: 水平滚动检查（数据表格/宽内容区域）
+  → 如果页面包含数据表格（如期权链、财务报表、持仓列表）或宽列表：
+    1. 在表格区域执行 swipe left（水平滚动）
+    2. take_screenshot 检查是否出现新的数据列
+    3. 如有新列 → 记录"[水平滚动发现隐藏列: {列名列表}]"
+    4. 继续 swipe left 直到无新列（最多 3 次）
+    5. swipe right 回到初始位置
+  → 判断标准：如果首屏表格只有 4-5 列但表头有截断（...或被裁切），
+    则很可能有隐藏列，必须水平滚动
+  → 实测案例：期权链首屏显示 Strike/Bid/Ask/Price/Chg，
+    左滑后出现 Delta/Gamma/Theta/Vega 等 Greeks 列
+
 STEP C: 底部快照
   → mobile_save_screenshot（{page}-scroll-{scroll_count}-bottom.png）
 
