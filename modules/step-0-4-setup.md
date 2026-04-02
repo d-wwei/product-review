@@ -65,13 +65,16 @@ mobile_list_available_devices
   评估用户环境，提供多设备并行建议：
 
   用 AskUserQuestion 询问（header: "并行加速"）：
-    "当前只有 1 台设备，完整探索预计 12-13 小时（串行）。
-     增加设备可大幅缩短时间。根据你的环境，以下哪种方案可行？"
+    "当前只有 1 台设备。每个功能页面的探索约需 25-35 分钟，
+     所有 agent 组串行执行。增加设备可按比例缩短时间：
+     · 2 台设备 → 时间减少约 45%
+     · 3 台设备 → 时间减少约 60%
+     根据你的环境，以下哪种方案可行？"
 
   选项：
   A. 连接 iOS/Android 真机（推荐，零额外资源）
      → 执行 ios-device-setup 或提示用户用 USB 连接 Android 真机
-     → 真机 + 模拟器并行，时间减半
+     → 真机 + 模拟器并行
      → 额外收益：可同时对比两个平台的差异
 
   B. 再启动一个模拟器（需要足够 RAM）
@@ -83,7 +86,7 @@ mobile_list_available_devices
        xcrun simctl boot <new_device_id>
      → 提醒用户：每个模拟器需 3-4GB RAM
 
-  C. 保持单设备（时间换成本）
+  C. 保持单设备
      → 无需额外操作，串行执行
 
   如果用户选 A 或 B：
@@ -266,12 +269,27 @@ ALTERNATIVE_NAV_STRATEGIES = ["search_navigation", "deep_link", "manual_handoff"
 
 ### 探索质量策略
 
+先根据广度扫描结果（Step 5.1 完成后）估算产品规模，再让用户选择策略：
+
+```
+产品规模估算（广度扫描后自动计算）：
+  pages = 探索队列中的总入口数
+  groups = agent 分组数
+  est_time_per_group = 30 min（单设备平均，含导航+滚动+交互+报告）
+  est_total_time = groups × est_time_per_group / device_count
+  est_cost_opus = groups × 0.30 × 5（input）+ groups × 0.05 × 25（output）
+  est_cost_mixed = est_cost_opus × 0.6（约省 40%）
+```
+
 用 AskUserQuestion 询问（header: "探索策略"）：
+
+"产品规模估算：{pages} 个入口，{groups} 个 agent 组。
+ 单设备预计耗时 {est_total_time}（每组约 25-35 分钟）。请选择探索策略："
 
 | 策略 | 说明 | 预估成本 | 预估时间 |
 |------|------|---------|---------|
-| **效果优先** | 所有 agent 使用最强模型（Opus），探索深度和发现能力最大化 | ~$45/次 | ~13h（单设备） |
-| **成本平衡** | 分层使用模型——机械探索用 Sonnet，分析和报告用 Opus，成本降 40% | ~$27/次 | ~13h（单设备） |
+| **效果优先** | 所有 agent 使用最强模型，探索深度和隐藏功能发现能力最大化 | ~${est_cost_opus} | {est_total_time} |
+| **成本平衡** | 分层模型——机械探索用轻量模型，分析报告用最强模型，成本降约 40% | ~${est_cost_mixed} | {est_total_time} |
 
 ```
 如果用户选择"效果优先"：
