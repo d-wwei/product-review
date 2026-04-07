@@ -97,6 +97,72 @@ mcp__macos-desktop-control__screenshot
 
 ---
 
+## 多图尺寸安全协议（必须遵守）
+
+> **背景**：Claude API 在单次请求中图片数量较多时，会切换到 "many-image" 模式，
+> 此模式下每张图片的尺寸上限收紧到 **2000px**（任意维度）。
+> 而现代设备（iPhone/Android）截图通常 2500-3000px，超过此限制。
+> 一旦 context 中积累了足够多的超尺寸图片，**所有后续请求都会报错且不可恢复**。
+>
+> 错误信息：`At least one of the image dimensions exceed max allowed size for many-image requests: 2000 pixels`
+
+### 核心规则
+
+**`HIGH_RES_DEVICE=true` 时（几乎所有现代设备），禁止直接使用 `mobile_take_screenshot`。**
+
+`mobile_take_screenshot` 返回 inline base64 图片，尺寸无法控制，会留在 context 中累积。
+必须使用以下安全截图流程替代。
+
+### 安全截图流程（Save → Resize → Read）
+
+```
+# 第 1 步：保存原图到磁盘
+mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/{name}.png
+
+# 第 2 步：缩放到安全尺寸（macOS 内置 sips，无需安装）
+Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/{name}.png
+
+# 第 3 步：需要视觉确认时用 Read 查看
+Read: {screenshots_dir}/{name}.png
+```
+
+**1800px** 留出 200px 余量（限制 2000px），兼顾清晰度和安全性。
+
+### 场景映射
+
+| 原方式 | 安全替代 | 说明 |
+|--------|---------|------|
+| `take_screenshot`（视觉确认页面跳转） | `save_screenshot` → `sips` → `Read` | 需要看画面时 |
+| `take_screenshot`（只确认是否在 App 内） | `list_elements_on_screen` | 不需要看画面，只需判断状态 |
+| `save_screenshot`（存档配图） | `save_screenshot` → `sips`（不需 Read） | 存档用，不进 context |
+
+### Subagent 注入模板
+
+主 agent 分派 subagent 时，在 prompt 中注入以下段落：
+
+```
+## 截图安全规则（HIGH_RES_DEVICE=true）
+禁止使用 mobile_take_screenshot。改用：
+  1. mobile_save_screenshot saveTo: {path}.png
+  2. Bash: sips --resampleHeightWidthMax 1800 {path}.png
+  3. 需要视觉确认时 Read {path}.png；不需要看则跳过 Read
+仅确认页面状态时，用 mobile_list_elements_on_screen 代替截图。
+```
+
+### 与截图优化协议的关系
+
+- **截图优化协议**（上一节）：用 `macos-desktop-control` 压缩截图，节省 token。**可选**。
+- **多图尺寸安全协议**（本节）：确保图片尺寸不超 2000px，防止 API 报错。**必须**。
+- 两者可叠加：先 `save_screenshot`，再 `sips` 缩放，然后用 `desktop-control` 压缩分析。
+- 没装 `macos-desktop-control` 时，`sips` + `Read` 是最低保障。
+
+### `LOW_RES_DEVICE=true` 时的豁免
+
+如果设备截图尺寸 ≤ 2000px（Step 1 检测），可以继续使用 `mobile_take_screenshot`。
+但仍建议在长 session（预计 > 15 张截图）中使用安全流程。
+
+---
+
 ## list_elements 调用纪律（Context 保护）
 
 > **背景**：`mobile_list_elements_on_screen` 每次返回大量 UI 元素文本（通常 50-200 行），
@@ -137,6 +203,80 @@ mcp__macos-desktop-control__screenshot
    - 用截图查看页面，估算坐标（参考已知元素坐标作为锚点）
    - 报告中标注 "[list_elements 不可用-已降级为视觉模式]"
 不要因为一次失败就放弃当前页面的探索。
+```
+
+---
+
+## Subagent 增量写入协议（防崩溃数据丢失）
+
+> **背景**：subagent 在长时间探索过程中可能因 context 耗尽、超时或内部错误而崩溃。
+> 如果报告是"探索完所有页面后一次性写入"，崩溃时所有探索数据全部丢失。
+> 实测中课堂 subagent 返回 `[Tool result missing due to internal error]`，但报告文件已部分写入。
+> 本协议将"最终产出"改为"增量追加"，让中间状态可观测。
+
+### 1. 分段写入（替代最终写入）
+
+**subagent 探索每个页面后立即将该页面的报告段落追加到报告文件，而非攒到最后一次性写。**
+
+```
+执行流程（每个页面）：
+
+1. 导航到目标页面
+2. 执行滚动扫描 + 交互探索
+3. **立即 Edit 追加该页面的报告段落到报告文件**
+   → 第一个页面用 Write 创建文件（含报告头部）
+   → 后续页面用 Edit 在文件末尾追加
+4. 继续下一个页面
+
+效果：即使 subagent 在第 3/5 个页面崩溃，前 2 个页面的报告已持久化。
+```
+
+### 2. 进度心跳（主 agent 可观测）
+
+**subagent 每完成一个子任务，Edit 更新 exploration-queue.md 的对应行状态。**
+
+```
+心跳更新格式（Edit exploration-queue.md 对应行）：
+
+| E5 | 牛牛圈-推荐 | ... | ✅ 完成 | 3 | 是 |    ← 完成时更新
+| E6 | 牛牛圈-关注 | ... | 🔄 进行中 |   |    |    ← 开始时更新
+| E7 | 牛牛圈-帖子详情 | ... | pending |   |    |    ← 未开始
+
+主 agent 无需等 subagent 返回，可随时 Read exploration-queue.md 判断进度。
+```
+
+### 3. Context 消耗预估（接近阈值时强制写报告）
+
+**subagent 追踪自己的截图数和工具调用数，接近安全上限时优先完成报告。**
+
+```
+追踪指标：
+- screenshot_count: 每次 save_screenshot 后 +1
+- tool_call_count: 粗估（subagent 无法精确获取，用操作计数近似）
+- read_image_count: 每次 Read 图片文件后 +1（这些图片进入 context）
+
+安全阈值：
+- read_image_count >= 12 → 停止 Read 新截图，仅 save 存档
+- tool_call_count >= 250 → 完成当前页面后立即写报告并退出
+- 任何时候感觉响应变慢 → 优先写报告
+
+核心原则：报告写入比探索覆盖更重要。
+宁可少探索 1 个页面，也不能因为贪探索而丢失整份报告。
+```
+
+### 4. Subagent Prompt 注入模板
+
+主 agent 在 subagent prompt 中注入以下段落：
+
+```
+## 增量写入规则（防崩溃）
+1. 每探索完一个页面，立即 Edit 追加报告段落到 {report_file}
+   - 第一个页面: Write 创建文件（含 # 标题 和报告头部）
+   - 后续页面: Edit 在 "---" 分隔符后追加新段落
+2. 每完成一个页面，Edit 更新 exploration-queue.md 对应行状态
+3. 追踪 Read 图片次数，>= 12 次后只 save 不 Read
+4. 感觉响应变慢或接近 250 次工具调用时，立即完成当前页面的报告并退出
+5. 报告写入 > 探索覆盖。宁可标记 [未完成-需续派]，也不能丢报告
 ```
 
 ---
@@ -268,6 +408,7 @@ agent 天然倾向于"看了第一屏就觉得够了"。以下协议强制量化
 STEP A: 初始快照
   → mobile_list_elements_on_screen → 记为 snapshot_0，元素数 = N0
   → mobile_save_screenshot（{page}-scroll-0-top.png）
+  → 如果 HIGH_RES_DEVICE=true: Bash: sips --resampleHeightWidthMax 1800 {path}
 
 STEP B: 滚动循环（增强版，含无限滚动检测 + 接力机制）
   → scroll_count = 0
@@ -313,6 +454,7 @@ STEP B.5: 水平滚动检查（数据表格/宽内容区域）
 
 STEP C: 底部快照
   → mobile_save_screenshot（{page}-scroll-{scroll_count}-bottom.png）
+  → 如果 HIGH_RES_DEVICE=true: Bash: sips --resampleHeightWidthMax 1800 {path}
 
 STEP D: 滚动摘要（必须写入报告）
   → "页面: {name} | 滚动: {scroll_count}次 | 首屏: {N0}个元素 | "

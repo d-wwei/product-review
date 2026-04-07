@@ -55,8 +55,11 @@ modules/
   step-0-4-setup.md            # 环境检查 → 设备 → 触控验证 → App → 模式 → 目录 (310 行)
   step-5-exploration.md        # 自主探索：广度扫描 + 细粒度分组 + 完成驱动机制 (700 行)
   step-5.5-6-personas.md       # 用户画像 + Persona 模拟三模式 (665 行)
+  persona-templates.md          # Persona 完整档案模板 + 行为指令集（数据文件，按需 Read）
+  step-6.8-content-evaluation.md # 内容评价：六维框架 + 抽样协议 (408 行，按需加载)
+  content-expert-roles.md        # 内容评估专家角色库（数据文件，按需加载）
   step-6.5-expert-review.md    # 专家评审：工作流缺口分析 + 功能机会 + 产品创新洞察 (280 行)
-  step-7-reports.md            # 报告模板：UX/手册/优化建议/专家评审 + 主agent直写 (800 行)
+  step-7-reports.md            # 报告模板：UX/手册/优化建议/专家评审/内容评价 + 主agent直写 (880 行)
   step-7.5-8-experience-bank.md # 经验沉淀 + 经验注入 (548 行)
   protocols.md                 # 操作速查 + list_elements纪律 + 数据压缩 + 深度探索协议 (352 行)
   appendix-domain-experts.md   # 领域专家原型库 (296 行)
@@ -77,6 +80,7 @@ modules/
 | `/product-review manual mece [App]` | 使用说明书详尽模式（MECE 穷尽） | `manual-full.md` |
 | `/product-review suggestion [App]` | 功能/体验优化建议 | `optimization.md` |
 | `/product-review expert-review [App]` | 领域专家级产品评审（工作流缺口+功能机会+创新建议） | `expert-review.md` |
+| `/product-review content-review [App]` | 内容评价（六维评估：质量+生态+分发+架构+消费+透明度） | `content-evaluation.md` |
 | `/product-review playcover-setup [App]` | 配置 PlayCover iPhone 模式 | 终端输出 |
 | `/product-review android-setup [App]` | 设置 Android 模拟器环境 | 终端输出 |
 | `/product-review ios-sim-setup [App]` | 设置 iOS 模拟器环境 | 终端输出 |
@@ -91,7 +95,7 @@ modules/
 
 ```
 参数解析规则：
-1. 从参数中提取 --mode=X、--personas=N 和 --expert-review 标志（如有），记录后从参数中移除
+1. 从参数中提取 --mode=X、--personas=N、--expert-review 和 --content-review 标志（如有），记录后从参数中移除
 2. 提取第一个词作为子命令候选
 3. 如果是 "ue-report" → 模式 = UE_REPORT，剩余参数 = App 名称
 4. 如果是 "manual"  → 读取第二个词：
@@ -104,10 +108,12 @@ modules/
    5.3 如果是 "ios-sim-setup" → 模式 = IOS_SIM_SETUP
    5.4 如果是 "ios-device-setup" → 模式 = IOS_DEVICE_SETUP
    5.5 如果是 "expert-review" → 模式 = EXPERT_REVIEW，剩余参数 = App 名称
+   5.6 如果是 "content-review" → 模式 = CONTENT_REVIEW，剩余参数 = App 名称
 6. 其他情况 → 模式 = INTERACTIVE，整个参数 = App 名称
 7. 如果提取到 --mode 标志，记录 persona_mode = A/B/C（默认 B）
 8. 如果提取到 --personas 标志，记录 persona_count = N（默认由 Step 5.5 决定）
 9. 如果提取到 --expert-review 标志，记录 EXPERT_REVIEW_ENABLED = true
+10. 如果提取到 --content-review 标志，记录 CONTENT_REVIEW_ENABLED = true
 ```
 
 **模式映射：**
@@ -119,6 +125,7 @@ modules/
 | MANUAL_MECE | 穷尽 | 说明书 MECE | 无 | 可选 | setup → exploration → [expert-review] → reports(7b) → exp-bank |
 | SUGGESTION | 完整+模拟 | 优化建议 | 必须 | 推荐 | setup → exploration → personas → [expert-review] → reports(7c) → exp-bank |
 | EXPERT_REVIEW | 完整 | 专家评审报告 | 无 | **必须** | setup → exploration → expert-review → reports(7e) → exp-bank |
+| CONTENT_REVIEW | 完整 | 内容评价报告 | 可选(默认开,注入内容偏好) | 可选 | setup → exploration → personas(内容增强) → [expert-review] → content-eval → reports(7f) → exp-bank |
 | INTERACTIVE | 用户选择 | 用户选择 | 用户选择 | 用户选择 | 按选择加载 |
 | *_SETUP | — | — | — | — | setup-commands.md 仅对应段落 |
 
@@ -131,6 +138,8 @@ modules/
 /product-review suggestion --personas=8 抖音  → 指定 8 个 persona
 /product-review suggestion --expert-review moomoo → 优化建议 + 专家评审
 /product-review expert-review moomoo         → 仅专家评审（跳过 Persona 模拟）
+/product-review content-review 今日头条     → 仅内容评价（含内容偏好 Persona）
+/product-review ue-report --content-review 小红书 → 体验报告 + 内容评价
 /product-review manual mece --expert-review moomoo → 详尽说明书 + 专家评审
 ```
 
@@ -180,8 +189,13 @@ Phase 3.5: 专家评审（EXPERT_REVIEW 模式必须 / --expert-review 标志 / 
   → 执行 Step 6.5（识别评审模块 → 生成专家 Persona → 执行评审 → 输出 expert-review.md）
   → 如需领域专家原型参考：Read modules/appendix-domain-experts.md
 
+Phase 3.7: 内容评价（CONTENT_REVIEW 模式必须 / --content-review 标志 / 内容产品自动建议）
+  → Read modules/step-6.8-content-evaluation.md
+  → 执行 Step 6.8（产品类型识别 → 内容抽样 → 六维评估 → 专家 Persona 评审 → 输出 content-evaluation.md）
+  → 消费者 Persona 的内容反馈作为用户证据注入专家评审
+
 Phase 4: 报告生成
-  → Read modules/step-7-reports.md（按子命令类型只看对应模板：7a/7b/7c/7e）
+  → Read modules/step-7-reports.md（按子命令类型只看对应模板：7a/7b/7c/7e/7f）
   → **规模预判**：统计 exploration-reports/ 文件数和总行数
     → 总行数 > 2000 或文件数 > 6：启用分批读取 + 拆分 agent 模式
   → **拆分策略**（大型报告必须拆分，不可交给单个 agent）：
@@ -229,6 +243,7 @@ Phase 5: 经验沉淀
 | `ue-report` | 5-6 | ~2500 | -28% |
 | `manual mece` | 3 | ~1400 | **-60%** |
 | `manual core` | 3 | ~1400 | **-60%** |
+| `content-review` | 5-7 | ~2600 | -25% |
 | `*-setup` | 1 | ~200 | **-94%** |
 | SKILL.md 本身 | — | ~200 | **-94%** |
 
@@ -246,3 +261,4 @@ Phase 5: 经验沉淀
 - 每个页面必须执行滚动扫描协议（最少 3 次 swipe，详见 protocols.md）
 - 敏感输入（交易密码等）→ 询问用户是否人工接力
 - 数据准确性：所见即所录，不要凭记忆描述之前的屏幕
+- **高分辨率截图安全**：现代设备截图超 2000px，累积后触发 API many-image 限制导致 session 崩溃。Step 1 自动检测并设 `HIGH_RES_DEVICE=true`，此时所有截图走 save→sips 缩放→Read 流程，禁用 take_screenshot（详见 protocols.md「多图尺寸安全协议」）

@@ -20,7 +20,13 @@
 先截图并列出当前屏幕元素：
 
 ```
-mobile_take_screenshot       device: <device_id>
+如果 HIGH_RES_DEVICE=true:
+  mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/00-breadth-start.png
+  Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/00-breadth-start.png
+  Read: {screenshots_dir}/00-breadth-start.png
+否则:
+  mobile_take_screenshot  device: <device_id>
+
 mobile_list_elements_on_screen  device: <device_id>
 ```
 
@@ -302,6 +308,14 @@ for group in agent_groups:
 ## 报告输出文件：{BASE_DIR}/exploration-reports/subagent-{group.id}.md
 ## 设备当前位置：{current_device_position[device]}
 
+{"## 截图安全规则（HIGH_RES_DEVICE=true）" if HIGH_RES_DEVICE else ""}
+{"禁止使用 mobile_take_screenshot（会返回超尺寸 inline 图片，累积后触发 API 2000px 限制导致 session 崩溃）。" if HIGH_RES_DEVICE else ""}
+{"改用安全三步流程：" if HIGH_RES_DEVICE else ""}
+{"  1. mobile_save_screenshot saveTo: {screenshots_dir}/{name}.png" if HIGH_RES_DEVICE else ""}
+{"  2. Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/{name}.png" if HIGH_RES_DEVICE else ""}
+{"  3. 需要视觉确认时 Read {screenshots_dir}/{name}.png；不需要看画面则跳过 Read" if HIGH_RES_DEVICE else ""}
+{"仅确认页面状态（是否在 App 内）时，用 mobile_list_elements_on_screen 代替截图。" if HIGH_RES_DEVICE else ""}
+
 ## ✅ 完成标准（唯一退出条件）
 你的任务在所有分配页面都已**彻底探索**且报告已写入文件后才算完成。
 没有工具调用次数预算——彻底 > 速度。
@@ -320,8 +334,20 @@ for group in agent_groups:
 - 如果发现实际复杂度远超预期（如一个页面有大量未预期的子入口），可以：
   正常完成已探索页面 → 写报告 → 标记未完成为 [实际复杂度远超预期-建议拆分]
 
-### 报告是必须完成项
-任何情况下都必须写入报告文件后才能退出。报告不是可选项。
+### 报告写入策略：增量追加（防崩溃丢失）
+**不要把报告攒到最后一次性写入。** 每探索完一个页面，立即将该页面的报告段落追加到文件。
+
+```
+增量写入流程：
+1. 探索第一个页面后 → Write 创建报告文件（含 # 标题 + 第一个页面段落）
+2. 探索后续页面后 → Edit 在文件末尾追加新段落（用 "---" 分隔）
+3. 每完成一个页面 → Edit 更新 exploration-queue.md 对应行状态
+4. 全部完成后 → Edit 追加尾部（滚动覆盖汇总表 + 未探索入口 + 截图映射）
+5. 追踪 Read 图片次数，>= 12 次后只 save 不 Read
+6. 接近 250 次工具调用或感觉响应变慢 → 立即写当前页面报告并退出
+```
+
+核心原则：**报告写入 > 探索覆盖。** 宁可标记 [未完成-需续派]，也不能因为贪探索而丢报告。
 
 ## 已探索页面（不需要重复进入）
 {explored_pages_list}
@@ -670,10 +696,31 @@ STEP D: 滚动摘要
 
 Step 1: 识别失败类型
   → 检查返回信号属于上述哪种
+  → **立即标记 exploration-queue.md**：
+    将对应组的状态改为 [internal_error-需检查文件]，避免静默丢失
   → 检查目标文件是否实际已写入（有时返回通道失败但文件已写入）
 
-Step 2: 如果文件已写入 → 任务实际成功，继续下一个任务
+Step 1.5: 检查增量写入产物（新增）
+  → 如果 subagent 遵循了增量写入协议（见 protocols.md），
+    即使返回 [Tool result missing]，报告文件中也可能有部分页面的数据
+  → ls 报告文件，Read 检查已写入的内容
+  → 如果已有 N 个页面的完整段落 → 只需为剩余页面续派 subagent
+  → 如果文件存在但不完整（最后一个段落被截断）→ 截掉不完整段落，续派
+
+Step 2: 如果文件已写入且内容充分（行数 > 20 且末尾段落完整）
+        → 任务实际成功，继续下一个任务
+        如果文件部分写入（增量写入的中间产物）
+        → 进入 Step 2.5（增量续派）
         如果文件未写入 → 进入 Step 3
+
+Step 2.5: 增量续派（新增）
+  → 读取已写入的报告文件，识别已完成和未完成的页面
+  → 从 exploration-queue.md 的心跳状态确认进度
+  → 只为未完成的页面分派续派 subagent
+  → 续派 prompt 中注明：
+    "前一位 agent 已完成以下页面：{已完成列表}。
+     报告文件已有这些页面的段落，请从 {未完成的第一个页面} 继续。
+     使用 Edit 追加到已有报告文件末尾。"
 
 Step 3: 分析原任务的负载
   → 计算: prompt 字数 + 需读取文件总行数 + 预期输出行数
@@ -693,9 +740,11 @@ Step 6: 全部完成后 cat 合并
 ❌ "加个 timeout 参数重试"
 ❌ "换个 prompt 措辞重试同样的负载量"
 ❌ 连续对同一任务失败 2 次后仍在重试而不拆分
+❌ 收到 [Tool result missing] 后不检查文件就直接重派（可能丢弃已写入的增量数据）
 
 允许的行为：
 ✅ 检查文件是否实际已写入（返回通道失败 ≠ 任务失败）
+✅ 检查增量写入的中间产物，基于已有数据续派而非从头重来
 ✅ 将失败 agent 已部分完成的工作纳入后续 agent 的输入
 ✅ 调整拆分粒度（如 2 个 agent 仍失败 → 拆成 4 个）
 ```

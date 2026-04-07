@@ -101,6 +101,27 @@ mobile_list_available_devices
 mobile_get_screen_size  device: <device_id>
 ```
 
+### 高分辨率设备检测（多图尺寸安全）
+
+```
+screen_size = mobile_get_screen_size(device)
+
+如果 screen_size.width > 2000 或 screen_size.height > 2000:
+  HIGH_RES_DEVICE = true
+  # 计算缩放目标：最长边缩到 1800px（留 200px 余量）
+  RESIZE_MAX = 1800
+  输出: "⚠️ 设备分辨率 {width}×{height} 超过 API 多图安全限制(2000px)。"
+  输出: "已启用截图自动缩放（→ {RESIZE_MAX}px），防止 session 中后期 API 报错。"
+  输出: "详见 protocols.md「多图尺寸安全协议」。"
+否则:
+  HIGH_RES_DEVICE = false
+  输出: "设备分辨率 {width}×{height}，在安全范围内。"
+```
+
+**为什么必须检测**：Claude API 在一次请求包含多张图片时，单张图片尺寸上限收紧到 2000px。
+product-review 的探索阶段会累积大量截图（实测 20+ 张），触发此限制后 **session 不可恢复**。
+详见 `protocols.md` 的"多图尺寸安全协议"。
+
 ---
 
 ## Step 2: 确认目标 App
@@ -125,7 +146,12 @@ mobile_launch_app  device: <device_id>  packageName: <package_name>
 截图确认启动成功：
 
 ```
-mobile_take_screenshot  device: <device_id>
+如果 HIGH_RES_DEVICE=true:
+  mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/00-launch.png
+  Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/00-launch.png
+  Read: {screenshots_dir}/00-launch.png
+否则:
+  mobile_take_screenshot  device: <device_id>
 ```
 
 ### App 启动失败 Fallback
