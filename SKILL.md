@@ -54,11 +54,11 @@ modules/
   integrations.md              # 外部 skill 集成：能力探测 + 推荐安装 + 场景增强 (238 行)
   step-0-4-setup.md            # 环境检查 → 设备 → 触控验证 → App → 模式 → 目录 (310 行)
   step-5-exploration.md        # 自主探索：广度扫描 + 细粒度分组 + 完成驱动机制 (700 行)
-  step-5.5-6-personas.md       # 用户画像 + Persona 模拟三模式 (665 行)
+  step-5.5-6-personas.md       # 用户画像 + Persona 模拟三模式 (236 行，v2 调度逻辑)
   persona-templates.md          # Persona 完整档案模板 + 行为指令集（数据文件，按需 Read）
-  step-6.8-content-evaluation.md # 内容评价：六维框架 + 抽样协议 (408 行，按需加载)
-  content-expert-roles.md        # 内容评估专家角色库（数据文件，按需加载）
   step-6.5-expert-review.md    # 专家评审：工作流缺口分析 + 功能机会 + 产品创新洞察 (280 行)
+  step-6.8-content-evaluation.md # 内容评价：六维框架 + 抽样协议 (408 行，专家角色分离)
+  content-expert-roles.md        # 内容评估专家角色库（数据文件，按需 Read）
   step-7-reports.md            # 报告模板：UX/手册/优化建议/专家评审/内容评价 + 主agent直写 (880 行)
   step-7.5-8-experience-bank.md # 经验沉淀 + 经验注入 (548 行)
   protocols.md                 # 操作速查 + list_elements纪律 + 数据压缩 + 深度探索协议 (352 行)
@@ -259,6 +259,6 @@ Phase 5: 经验沉淀
 - subagent 遇到需要登录的功能 → 先尝试其他入口，实在需要 → AskUserQuestion
 - 所有产品数据只能来自 App 内或官方渠道，禁止第三方网站
 - 每个页面必须执行滚动扫描协议（最少 3 次 swipe，详见 protocols.md）
+- **截图安全（强制）**：product-review 流程中**始终**走 save→sips→Read thumbnail 双图流程，禁止直接使用 `take_screenshot`。无论设备分辨率高低，探索阶段截图量大（30-100+），inline 图片累积会导致 session 崩溃。Step 1 用实际截图像素（sips -g pixelWidth）而非逻辑分辨率来检测设备（详见 protocols.md「多图尺寸安全协议」）
 - 敏感输入（交易密码等）→ 询问用户是否人工接力
 - 数据准确性：所见即所录，不要凭记忆描述之前的屏幕
-- **高分辨率截图安全**：现代设备截图超 2000px，累积后触发 API many-image 限制导致 session 崩溃。Step 1 自动检测并设 `HIGH_RES_DEVICE=true`，此时所有截图走 save→sips 缩放→Read 流程，禁用 take_screenshot（详见 protocols.md「多图尺寸安全协议」）

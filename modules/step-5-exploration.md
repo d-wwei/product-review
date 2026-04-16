@@ -20,12 +20,10 @@
 先截图并列出当前屏幕元素：
 
 ```
-如果 HIGH_RES_DEVICE=true:
-  mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/00-breadth-start.png
-  Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/00-breadth-start.png
-  Read: {screenshots_dir}/00-breadth-start.png
-否则:
-  mobile_take_screenshot  device: <device_id>
+mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/originals/00-breadth-start.png
+Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 \
+  {screenshots_dir}/originals/00-breadth-start.png --out {screenshots_dir}/thumbnails/00-breadth-start.jpg
+Read: {screenshots_dir}/thumbnails/00-breadth-start.jpg
 
 mobile_list_elements_on_screen  device: <device_id>
 ```
@@ -308,13 +306,14 @@ for group in agent_groups:
 ## 报告输出文件：{BASE_DIR}/exploration-reports/subagent-{group.id}.md
 ## 设备当前位置：{current_device_position[device]}
 
-{"## 截图安全规则（HIGH_RES_DEVICE=true）" if HIGH_RES_DEVICE else ""}
-{"禁止使用 mobile_take_screenshot（会返回超尺寸 inline 图片，累积后触发 API 2000px 限制导致 session 崩溃）。" if HIGH_RES_DEVICE else ""}
-{"改用安全三步流程：" if HIGH_RES_DEVICE else ""}
-{"  1. mobile_save_screenshot saveTo: {screenshots_dir}/{name}.png" if HIGH_RES_DEVICE else ""}
-{"  2. Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/{name}.png" if HIGH_RES_DEVICE else ""}
-{"  3. 需要视觉确认时 Read {screenshots_dir}/{name}.png；不需要看画面则跳过 Read" if HIGH_RES_DEVICE else ""}
-{"仅确认页面状态（是否在 App 内）时，用 mobile_list_elements_on_screen 代替截图。" if HIGH_RES_DEVICE else ""}
+## 截图安全规则（强制，无例外）
+禁止使用 mobile_take_screenshot（会返回 inline 图片累积在 context 中，导致 session 不稳定或崩溃）。
+改用 originals/thumbnails 双图流程：
+  1. 保存原图：mobile_save_screenshot saveTo: {screenshots_dir}/originals/{name}.png
+  2. 生成缩略图：Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 {screenshots_dir}/originals/{name}.png --out {screenshots_dir}/thumbnails/{name}.jpg
+  3. 需要视觉确认时只 Read 缩略图：Read {screenshots_dir}/thumbnails/{name}.jpg
+仅确认页面状态（是否在 App 内）时，用 mobile_list_elements_on_screen 代替截图。
+报告中引用截图时写缩略图路径，最终文档/视频生成时自动替换为原图。
 
 ## ✅ 完成标准（唯一退出条件）
 你的任务在所有分配页面都已**彻底探索**且报告已写入文件后才算完成。

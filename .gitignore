@@ -5,3 +5,6 @@ reviews/
 archive/
 articles/
 product-review-skill.zip
+
+# Agent Recall data
+.agent-recall/

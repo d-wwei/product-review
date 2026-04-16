@@ -103,23 +103,48 @@ mobile_get_screen_size  device: <device_id>
 
 ### 高分辨率设备检测（多图尺寸安全）
 
+> **⚠️ 重要教训**：`mobile_get_screen_size` 返回的是**逻辑分辨率**，不是物理像素。
+> iPhone 16 Pro Max 返回 440×956，但实际截图是 1320×2868（3x Retina scale）。
+> 仅靠逻辑分辨率判定会导致真机被误判为低分辨率设备，绕过安全截图流程。
+
+**检测流程（必须用实际截图像素，不能只看 get_screen_size）**：
+
 ```
+# 第 1 步：获取逻辑分辨率（仅供参考）
 screen_size = mobile_get_screen_size(device)
+输出: "逻辑分辨率: {width}×{height}"
 
-如果 screen_size.width > 2000 或 screen_size.height > 2000:
+# 第 2 步：实际截图测量（权威依据）
+mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/originals/_resolution_test.png
+Bash: sips -g pixelWidth -g pixelHeight {screenshots_dir}/originals/_resolution_test.png
+
+# 第 3 步：基于实际像素判定
+如果 pixelWidth > 2000 或 pixelHeight > 2000:
   HIGH_RES_DEVICE = true
-  # 计算缩放目标：最长边缩到 1800px（留 200px 余量）
-  RESIZE_MAX = 1800
-  输出: "⚠️ 设备分辨率 {width}×{height} 超过 API 多图安全限制(2000px)。"
-  输出: "已启用截图自动缩放（→ {RESIZE_MAX}px），防止 session 中后期 API 报错。"
-  输出: "详见 protocols.md「多图尺寸安全协议」。"
+  输出: "⚠️ 实际截图像素 {pixelWidth}×{pixelHeight} 超过 API 多图安全限制(2000px)。"
+  输出: "（逻辑分辨率 {width}×{height}，设备 scale ≈ {pixelWidth/width}x）"
+  输出: "已启用双图截图流程（原图→originals/，缩略图→thumbnails/ JPEG 800px q70）。"
 否则:
+  # 即使像素 ≤ 2000，product-review 探索阶段截图量通常 > 30 张
+  # 必须启用安全截图流程防止 context 膨胀
   HIGH_RES_DEVICE = false
-  输出: "设备分辨率 {width}×{height}，在安全范围内。"
+  FORCE_SAFE_SCREENSHOTS = true
+  输出: "实际截图像素 {pixelWidth}×{pixelHeight}，在 API 尺寸限制内。"
+  输出: "但 product-review 探索截图量大（通常 30-100+ 张），仍强制使用安全截图流程防止 context 膨胀。"
+
+# 清理测试图片（不影响后续）
+Bash: rm {screenshots_dir}/originals/_resolution_test.png
 ```
 
-**为什么必须检测**：Claude API 在一次请求包含多张图片时，单张图片尺寸上限收紧到 2000px。
-product-review 的探索阶段会累积大量截图（实测 20+ 张），触发此限制后 **session 不可恢复**。
+**结论：product-review 流程中始终使用安全截图流程（save→sips→Read thumbnail），无例外。**
+
+逻辑分辨率 vs 物理像素仅影响 sips 压缩参数（低分辨率设备缩略图可用更大尺寸），
+但截图流程本身不因分辨率而降级为 inline `take_screenshot`。
+
+**为什么必须这样做**：
+1. Claude API many-image 模式下单张上限 2000px，真机 Retina 截图通常 2500-3000px
+2. 即使低于 2000px，30+ 张 inline 图片（每张 ~30-50KB base64）累积 ~1-3MB context，导致 session 不稳定
+3. 实测 2026-04-12 session：iPhone 16 Pro Max 逻辑 440×956 误判为低分辨率，30 次 take_screenshot 累积 101 张 inline 图片（3.4MB），session 被迫中断
 详见 `protocols.md` 的"多图尺寸安全协议"。
 
 ---
@@ -143,15 +168,13 @@ mobile_list_apps  device: <device_id>
 mobile_launch_app  device: <device_id>  packageName: <package_name>
 ```
 
-截图确认启动成功：
+截图确认启动成功（**始终走安全流程**）：
 
 ```
-如果 HIGH_RES_DEVICE=true:
-  mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/00-launch.png
-  Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/00-launch.png
-  Read: {screenshots_dir}/00-launch.png
-否则:
-  mobile_take_screenshot  device: <device_id>
+mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/originals/00-launch.png
+Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 \
+  {screenshots_dir}/originals/00-launch.png --out {screenshots_dir}/thumbnails/00-launch.jpg
+Read: {screenshots_dir}/thumbnails/00-launch.jpg
 ```
 
 ### App 启动失败 Fallback
@@ -413,7 +436,7 @@ DATE=$(date +%Y%m%d)
 VERSION="<app_version_if_available>"
 BASE_DIR="/Users/admin/Documents/AI/product-experience-review/reviews/${APP_NAME}/${DATE}"
 SCREENSHOTS_DIR="${BASE_DIR}/screenshots"
-mkdir -p "$SCREENSHOTS_DIR"
+mkdir -p "$SCREENSHOTS_DIR/originals" "$SCREENSHOTS_DIR/thumbnails"
 echo "工作目录: $BASE_DIR"
 ```
 
@@ -436,10 +459,16 @@ reviews/
       report-quality.md                 #     报告质量
   <app-name>/
     <YYYYMMDD>/
-      screenshots/                      # 所有截图
-        01-launch.png
-        02-home-tab1.png
+      screenshots/                      # 双图截图目录
+        originals/                      #   设备原图（完整分辨率，用于最终输出）
+          01-launch.png
+          02-home-tab1.png
+        thumbnails/                     #   缩略图（JPEG 800px q70，用于会话内分析）
+          01-launch.jpg
+          02-home-tab1.jpg
         persona-1/                      # Persona 自主体验截图（模式 A/B）
+          originals/
+          thumbnails/
         persona-2/
         ...
       exploration-reports/              # Subagent 探索报告（每个 subagent 一个文件）

@@ -105,61 +105,120 @@ mcp__macos-desktop-control__screenshot
 > 一旦 context 中积累了足够多的超尺寸图片，**所有后续请求都会报错且不可恢复**。
 >
 > 错误信息：`At least one of the image dimensions exceed max allowed size for many-image requests: 2000 pixels`
+>
+> **v2 改进**：旧版用 sips 原地缩放，破坏原图且 1800px 缩略图仍然偏大（~300KB/张），
+> 积累 15+ 张就撑爆 context。新版采用 originals/thumbnails 双目录，原图完整保留，
+> 缩略图压缩为 JPEG 800px q70（~25KB/张），支持 100+ 截图的长 session。
 
 ### 核心规则
 
-**`HIGH_RES_DEVICE=true` 时（几乎所有现代设备），禁止直接使用 `mobile_take_screenshot`。**
+**在 product-review 流程中，禁止直接使用 `mobile_take_screenshot`。无例外。**
 
 `mobile_take_screenshot` 返回 inline base64 图片，尺寸无法控制，会留在 context 中累积。
+无论设备分辨率高低，product-review 探索阶段截图量通常 30-100+ 张，
+即使每张仅 ~30KB，累积也会导致 context 膨胀 1-3MB，引发 session 不稳定。
 必须使用以下安全截图流程替代。
 
-### 安全截图流程（Save → Resize → Read）
+> **v3 教训（2026-04-12）**：iPhone 16 Pro Max `get_screen_size` 返回 440×956（逻辑分辨率），
+> 被误判为低分辨率设备，30 次 `take_screenshot` 累积 101 张 inline 图片（3.4MB），session 被迫中断。
+> 根因：逻辑分辨率 ≠ 物理像素（实际截图 1320×2868），且低分辨率豁免不应存在。
+
+### 目录结构
 
 ```
-# 第 1 步：保存原图到磁盘
-mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/{name}.png
-
-# 第 2 步：缩放到安全尺寸（macOS 内置 sips，无需安装）
-Bash: sips --resampleHeightWidthMax 1800 {screenshots_dir}/{name}.png
-
-# 第 3 步：需要视觉确认时用 Read 查看
-Read: {screenshots_dir}/{name}.png
+{screenshots_dir}/
+  originals/          # 设备原图，完整分辨率，永不修改
+    s1_01_markets.png   # 用于最终文档/视频生成
+  thumbnails/         # 会话内引用，压缩后的 JPEG
+    s1_01_markets.jpg   # 用于 subagent 分析和视觉确认
 ```
 
-**1800px** 留出 200px 余量（限制 2000px），兼顾清晰度和安全性。
+**映射关系**：同名文件（仅扩展名不同 .png → .jpg），通过文件名一一对应。
+最终文档/视频生成时，将 `thumbnails/{name}.jpg` 替换为 `originals/{name}.png`。
+
+### 安全截图流程（Save → Copy+Compress → Read Thumbnail）
+
+```
+# 第 1 步：保存原图到 originals/（完整分辨率，不做任何处理）
+mobile_save_screenshot  device: <device_id>  saveTo: {screenshots_dir}/originals/{name}.png
+
+# 第 2 步：生成缩略图到 thumbnails/（JPEG 800px q70）
+Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 \
+  {screenshots_dir}/originals/{name}.png \
+  --out {screenshots_dir}/thumbnails/{name}.jpg
+
+# 第 3 步：需要视觉确认时，只 Read 缩略图（~25KB vs 原图 ~500KB）
+Read: {screenshots_dir}/thumbnails/{name}.jpg
+```
+
+**为什么 800px + JPEG q70？**
+- 800px：远低于 2000px 限制，布局和文字仍可辨认
+- JPEG q70：单张 ~20-30KB，比 PNG 1800px（~300KB）小 10 倍+
+- 100 张缩略图全部 Read 也仅 ~2.5MB，远在 context 安全范围内
+- 原图完整保留在 originals/，最终输出不损失质量
 
 ### 场景映射
 
 | 原方式 | 安全替代 | 说明 |
 |--------|---------|------|
-| `take_screenshot`（视觉确认页面跳转） | `save_screenshot` → `sips` → `Read` | 需要看画面时 |
+| `take_screenshot`（视觉确认页面跳转） | `save → sips → Read thumbnail` | 需要看画面时 |
 | `take_screenshot`（只确认是否在 App 内） | `list_elements_on_screen` | 不需要看画面，只需判断状态 |
-| `save_screenshot`（存档配图） | `save_screenshot` → `sips`（不需 Read） | 存档用，不进 context |
+| `save_screenshot`（存档配图） | `save → sips`（不需 Read） | 存档用，不进 context |
+| 最终文档/视频引用截图 | 引用 `originals/{name}.png` | 用原图，不用缩略图 |
+
+### 目录初始化
+
+Step 4 创建截图目录时，同时创建两个子目录：
+
+```bash
+mkdir -p {screenshots_dir}/originals {screenshots_dir}/thumbnails
+```
+
+如果按 scene 分组：
+```bash
+mkdir -p {screenshots_dir}/scene1/originals {screenshots_dir}/scene1/thumbnails
+```
 
 ### Subagent 注入模板
 
 主 agent 分派 subagent 时，在 prompt 中注入以下段落：
 
 ```
-## 截图安全规则（HIGH_RES_DEVICE=true）
-禁止使用 mobile_take_screenshot。改用：
-  1. mobile_save_screenshot saveTo: {path}.png
-  2. Bash: sips --resampleHeightWidthMax 1800 {path}.png
-  3. 需要视觉确认时 Read {path}.png；不需要看则跳过 Read
+## 截图安全规则（强制）
+禁止使用 mobile_take_screenshot。改用双图流程：
+
+1. 保存原图：
+   mobile_save_screenshot saveTo: {dir}/originals/{name}.png
+
+2. 生成缩略图：
+   Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 \
+     {dir}/originals/{name}.png --out {dir}/thumbnails/{name}.jpg
+
+3. 需要视觉确认时只 Read 缩略图：
+   Read {dir}/thumbnails/{name}.jpg
+   不需要看则跳过 Read
+
 仅确认页面状态时，用 mobile_list_elements_on_screen 代替截图。
+报告中引用截图时写缩略图路径，最终文档生成时自动替换为原图。
 ```
 
 ### 与截图优化协议的关系
 
 - **截图优化协议**（上一节）：用 `macos-desktop-control` 压缩截图，节省 token。**可选**。
-- **多图尺寸安全协议**（本节）：确保图片尺寸不超 2000px，防止 API 报错。**必须**。
-- 两者可叠加：先 `save_screenshot`，再 `sips` 缩放，然后用 `desktop-control` 压缩分析。
-- 没装 `macos-desktop-control` 时，`sips` + `Read` 是最低保障。
+- **多图尺寸安全协议**（本节）：originals/thumbnails 双目录，防 API 报错 + 保留原图。**必须**。
+- 两者可叠加：缩略图用 sips 生成，分析时可额外用 `desktop-control` 做 tile 切片。
+- 没装 `macos-desktop-control` 时，sips 双图流程是最低保障。
 
-### `LOW_RES_DEVICE=true` 时的豁免
+### 低分辨率设备（无豁免）
 
-如果设备截图尺寸 ≤ 2000px（Step 1 检测），可以继续使用 `mobile_take_screenshot`。
-但仍建议在长 session（预计 > 15 张截图）中使用安全流程。
+即使设备截图尺寸 ≤ 2000px，product-review 流程中**仍然强制使用安全截图流程**。
+
+原因：
+1. `get_screen_size` 返回逻辑分辨率，不代表实际截图像素（Retina 设备 3x 放大）
+2. product-review 探索阶段截图量大（30-100+），即使小尺寸图片累积也撑爆 context
+3. 统一流程消除了判断分支，减少了 subagent 出错的可能
+
+唯一的区别：低分辨率设备的缩略图可以用更大尺寸（如 1200px 而非 800px），以获得更清晰的视觉确认。
 
 ---
 
@@ -407,8 +466,8 @@ agent 天然倾向于"看了第一屏就觉得够了"。以下协议强制量化
 
 STEP A: 初始快照
   → mobile_list_elements_on_screen → 记为 snapshot_0，元素数 = N0
-  → mobile_save_screenshot（{page}-scroll-0-top.png）
-  → 如果 HIGH_RES_DEVICE=true: Bash: sips --resampleHeightWidthMax 1800 {path}
+  → mobile_save_screenshot（originals/{page}-scroll-0-top.png）
+  → 如果 HIGH_RES_DEVICE=true: Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 originals/{page}-scroll-0-top.png --out thumbnails/{page}-scroll-0-top.jpg
 
 STEP B: 滚动循环（增强版，含无限滚动检测 + 接力机制）
   → scroll_count = 0
@@ -453,8 +512,8 @@ STEP B.5: 水平滚动检查（数据表格/宽内容区域）
     左滑后出现 Delta/Gamma/Theta/Vega 等 Greeks 列
 
 STEP C: 底部快照
-  → mobile_save_screenshot（{page}-scroll-{scroll_count}-bottom.png）
-  → 如果 HIGH_RES_DEVICE=true: Bash: sips --resampleHeightWidthMax 1800 {path}
+  → mobile_save_screenshot（originals/{page}-scroll-{scroll_count}-bottom.png）
+  → 如果 HIGH_RES_DEVICE=true: Bash: sips --resampleHeightWidthMax 800 -s format jpeg -s formatOptions 70 originals/{page}-scroll-{scroll_count}-bottom.png --out thumbnails/{page}-scroll-{scroll_count}-bottom.jpg
 
 STEP D: 滚动摘要（必须写入报告）
   → "页面: {name} | 滚动: {scroll_count}次 | 首屏: {N0}个元素 | "
